@@ -1,68 +1,58 @@
 // ================================================================
-// IMMORTAIL™ — MAIN ENTRY POINT
-// Initializes boot pipeline, mounts React safely.
-// NO BUSINESS LOGIC INSIDE MAIN.
+// IMMORTAIL™ — APPLICATION ENTRY POINT (Run 9)
+// Boot sequence invocation + React mount.
+// NO UI LOGIC HERE. PURE ORCHESTRATION.
 // ================================================================
 
-import React from 'react';
+import React       from 'react';
 import { createRoot } from 'react-dom/client';
-import { initializeApp } from './core/boot.js';
-import { BootLogger } from './utils/logger.js';
-import App from './App.jsx';
 import './index.css';
+import App         from './App.jsx';
+import { initializeApp } from './core/boot.js';
 
 // ----------------------------------------------------------------
-// MOUNT REACT
+// PWA — Viewport meta enforcement
 // ----------------------------------------------------------------
 
-function mountApplication() {
-  const rootElement = document.getElementById('root');
-
-  if (!rootElement) {
-    throw new Error('Root DOM element #root not found. Cannot mount application.');
+if (typeof document !== 'undefined') {
+  let viewportMeta = document.querySelector('meta[name="viewport"]');
+  if (!viewportMeta) {
+    viewportMeta = document.createElement('meta');
+    viewportMeta.name = 'viewport';
+    document.head.appendChild(viewportMeta);
   }
+  viewportMeta.content =
+    'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1';
+}
 
-  const root = createRoot(rootElement);
+// ----------------------------------------------------------------
+// REACT MOUNT
+// ----------------------------------------------------------------
+
+const container = document.getElementById('root');
+
+if (!container) {
+  console.error('[IMMORTAIL] Fatal: #root element not found in DOM.');
+} else {
+  const root = createRoot(container);
+
+  // Mount immediately — App handles loading/boot states internally
   root.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
   );
 
-  BootLogger.info('React application mounted to #root.');
+  // ── Boot sequence ──────────────────────────────────────────────
+  // Run after first render so the loading screen is visible
+  initializeApp(async () => {
+    // onReady callback — boot complete, app transitions to ready state
+    // DOM CustomEvent dispatched by boot.js → App picks it up
+    window.dispatchEvent(new CustomEvent('immortailapp:app_ready'));
+  }).catch((err) => {
+    console.error('[IMMORTAIL] Fatal boot error:', err);
+    window.dispatchEvent(
+      new CustomEvent('immortailapp:boot_failed', { detail: { error: err.message } })
+    );
+  });
 }
-
-// ----------------------------------------------------------------
-// ENTRY POINT — Run boot pipeline then mount
-// ----------------------------------------------------------------
-
-initializeApp(mountApplication).catch((fatalError) => {
-  // Last-resort handler — boot.js already handles errors internally,
-  // but this catches any unexpected throw that escapes the pipeline.
-  console.error('[IMMORTAIL][MAIN][FATAL] Unhandled boot failure:', fatalError);
-
-  const rootElement = document.getElementById('root');
-  if (rootElement) {
-    rootElement.innerHTML = `
-      <div style="
-        min-height: 100vh;
-        background: #020617;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: monospace;
-        color: #ef4444;
-        flex-direction: column;
-        gap: 12px;
-        padding: 24px;
-        text-align: center;
-      ">
-        <div style="font-size: 18px; font-weight: bold; letter-spacing: 0.15em;">IMMORTAIL™</div>
-        <div style="font-size: 12px; color: #64748b;">FATAL BOOT FAILURE</div>
-        <div style="font-size: 11px; color: #ef4444; max-width: 400px; margin-top: 8px;">
-          ${fatalError?.message || 'Unknown initialization error.'}
-        </div>
-      </div>
-    `;
-  }
-});
