@@ -8,18 +8,18 @@
 const PREFIX = 'immortail_';
 
 export const KEYS = {
-  DOG:      PREFIX + 'dog',
-  MEMORIES: PREFIX + 'memories',
-  SETTINGS: PREFIX + 'settings',
-  SESSION:  PREFIX + 'session',
-  CONFIG:   PREFIX + 'config',
-  MEDIA:    PREFIX + 'media',
+  DOG:           PREFIX + 'dog',
+  MEMORIES:      PREFIX + 'memories',
+  SETTINGS:      PREFIX + 'settings',
+  SESSION:       PREFIX + 'session',
+  CONFIG:        PREFIX + 'config',
+  MEDIA:         PREFIX + 'media',
+  COMPANION_CORE: PREFIX + 'companion_core',   // Run 3: unified entity state
 };
 
-// ── Default system config (SSOT for all flags + providers + routes) ──
+// ── Default system config ─────────────────────────────────────────
 
 export const DEFAULT_CONFIG = {
-  // Feature flags
   features: {
     mediaInput:  true,
     audioInput:  true,
@@ -27,8 +27,6 @@ export const DEFAULT_CONFIG = {
     imageInput:  true,
     ollama:      true,
   },
-
-  // AI provider registry
   providers: {
     openai: {
       enabled:  false,
@@ -43,20 +41,44 @@ export const DEFAULT_CONFIG = {
       status:   'active',
     },
   },
-
-  // Routing
   routes: {
     home:      '/',
     memory:    '/memory',
     settings:  '/settings',
     media:     '/media',
   },
-
   appConfig: {
     homeUrl:   '/',
     version:   '1.0.0',
     buildDate: new Date().toISOString().split('T')[0],
   },
+};
+
+// ── Default companionCore (Run 3 — SSOT unified entity) ───────────
+
+export const DEFAULT_COMPANION_CORE = {
+  identity: {
+    name:     'Immortail Dog',
+    mood:     'neutral',
+    energy:   50,
+    trust:    0,
+    createdAt: null,   // set on first boot
+  },
+  memory:         [],        // all timeline events (chat + media + emotional)
+  mediaMemory:    [],        // media-specific subset (images, audio, video)
+  behaviourState: {
+    current:        'idle',
+    previous:       null,
+    updatedAt:      null,
+    waitingSince:   null,    // set when idle > threshold
+  },
+  emotionalState: {
+    dominant:   'neutral',
+    valence:    0,           // -100 (negative) → +100 (positive)
+    arousal:    50,          // 0 (calm) → 100 (excited)
+    updatedAt:  null,
+  },
+  lastInteraction: null,
 };
 
 // ── Serialisation ─────────────────────────────────────────────────
@@ -88,7 +110,7 @@ function remove(key) {
 
 // ── Deep merge utility ────────────────────────────────────────────
 
-function deepMerge(base, override) {
+export function deepMerge(base, override) {
   const result = { ...base };
   for (const key of Object.keys(override ?? {})) {
     if (
@@ -106,46 +128,43 @@ function deepMerge(base, override) {
   return result;
 }
 
+// ── ID generator ──────────────────────────────────────────────────
+
+function genId() {
+  return Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
 // ── Public API ────────────────────────────────────────────────────
 
 export const storage = {
 
-  // ── Dog profile ─────────────────────────────────────────────────
+  // ── Dog profile (Run 1–2 compat) ────────────────────────────────
   getDog:     ()     => read(KEYS.DOG),
   saveDog:    (data) => write(KEYS.DOG, data),
 
-  // ── Memories (array, capped at 200) ─────────────────────────────
+  // ── Legacy Memories (Run 1–2 compat — capped at 200) ────────────
   getMemories:  ()    => read(KEYS.MEMORIES) ?? [],
   saveMemories: (arr) => write(KEYS.MEMORIES, arr.slice(-200)),
   addMemory: (entry) => {
     const list = storage.getMemories();
-    list.push({
-      ...entry,
-      id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-    });
+    list.push({ ...entry, id: genId() });
     return storage.saveMemories(list);
   },
 
-  // ── Settings (raw companion prefs) ──────────────────────────────
+  // ── Settings ────────────────────────────────────────────────────
   getSettings:  ()     => read(KEYS.SETTINGS) ?? {},
   saveSettings: (data) => write(KEYS.SETTINGS, data),
 
   // ── System config (features + providers + routes) ────────────────
-  // Always deep-merges persisted overrides onto DEFAULT_CONFIG.
-  // Guarantees all default keys exist even after a partial save.
   getConfig: () => {
     const persisted = read(KEYS.CONFIG);
     return deepMerge(DEFAULT_CONFIG, persisted ?? {});
   },
   saveConfig: (data) => {
-    // Merge incoming patch onto current config before saving
-    const current = storage.getConfig();
-    const merged  = deepMerge(current, data);
+    const merged = deepMerge(storage.getConfig(), data);
     return write(KEYS.CONFIG, merged);
   },
-  // Granular config patch helper
   patchConfig: (path, value) => {
-    // path: 'features.ollama' → sets config.features.ollama = value
     const config = storage.getConfig();
     const parts  = path.split('.');
     let obj = config;
@@ -157,27 +176,106 @@ export const storage = {
     return write(KEYS.CONFIG, config);
   },
 
-  // ── Media registry (captured/uploaded media references) ─────────
+  // ── Media registry (Run 2 compat) ───────────────────────────────
   getMedia:  ()    => read(KEYS.MEDIA) ?? [],
   saveMedia: (arr) => write(KEYS.MEDIA, arr),
   addMedia: (entry) => {
     const list = storage.getMedia();
-    list.push({
-      ...entry,
-      id:        Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-      createdAt: Date.now(),
-    });
-    // Cap at 100 media entries
+    list.push({ ...entry, id: genId(), createdAt: Date.now() });
     return write(KEYS.MEDIA, list.slice(-100));
   },
   removeMedia: (id) => {
-    const list = storage.getMedia().filter(m => m.id !== id);
-    return storage.saveMedia(list);
+    return storage.saveMedia(storage.getMedia().filter(m => m.id !== id));
   },
 
-  // ── Session (transient boot context) ────────────────────────────
+  // ── Session ─────────────────────────────────────────────────────
   getSession:  ()     => read(KEYS.SESSION) ?? {},
   saveSession: (data) => write(KEYS.SESSION, data),
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── COMPANION CORE (Run 3) ────────────────────────────────────────
+  // Single unified entity. ALL companion state lives here.
+  // Arrays use .slice(-500) cap. No external writes allowed.
+  // ══════════════════════════════════════════════════════════════════
+
+  /**
+   * getCompanionCore()
+   * Deep-merges persisted state onto defaults.
+   * Arrays from storage take precedence (not overwritten by defaults).
+   */
+  getCompanionCore: () => {
+    const persisted = read(KEYS.COMPANION_CORE);
+    if (!persisted) {
+      // First boot — initialise with timestamp
+      const initial = deepMerge(DEFAULT_COMPANION_CORE, {
+        identity: { createdAt: Date.now() },
+      });
+      write(KEYS.COMPANION_CORE, initial);
+      return initial;
+    }
+    // Merge: preserve persisted arrays, merge scalar defaults
+    return {
+      identity:       deepMerge(DEFAULT_COMPANION_CORE.identity, persisted.identity ?? {}),
+      memory:         persisted.memory         ?? [],
+      mediaMemory:    persisted.mediaMemory     ?? [],
+      behaviourState: deepMerge(DEFAULT_COMPANION_CORE.behaviourState, persisted.behaviourState ?? {}),
+      emotionalState: deepMerge(DEFAULT_COMPANION_CORE.emotionalState, persisted.emotionalState ?? {}),
+      lastInteraction: persisted.lastInteraction ?? null,
+    };
+  },
+
+  /**
+   * saveCompanionCore(core)
+   * Full save. Called only by companionCoreService.
+   */
+  saveCompanionCore: (core) => write(KEYS.COMPANION_CORE, core),
+
+  /**
+   * patchCompanionCore(patch)
+   * Shallow-merges a patch object onto the current core.
+   * For identity/behaviourState/emotionalState patches use patchCoreSection.
+   */
+  patchCompanionCore: (patch) => {
+    const current = storage.getCompanionCore();
+    const updated = { ...current, ...patch };
+    return write(KEYS.COMPANION_CORE, updated);
+  },
+
+  /**
+   * patchCoreSection(section, patch)
+   * Deep-merges a patch into a named section of the core.
+   * section: 'identity' | 'behaviourState' | 'emotionalState'
+   */
+  patchCoreSection: (section, patch) => {
+    const core = storage.getCompanionCore();
+    core[section] = deepMerge(core[section] ?? {}, patch);
+    return write(KEYS.COMPANION_CORE, core);
+  },
+
+  /**
+   * addCoreMemory(event)
+   * Appends to companionCore.memory timeline. Max 500 entries.
+   * If event is media-type, also pushes to mediaMemory. Max 100.
+   */
+  addCoreMemory: (event) => {
+    const core = storage.getCompanionCore();
+    const entry = {
+      ...event,
+      id:  genId(),
+      ts:  event.ts ?? Date.now(),
+    };
+
+    core.memory = [...core.memory, entry].slice(-500);
+
+    if (['image', 'audio', 'video'].includes(event.type)) {
+      core.mediaMemory = [...core.mediaMemory, entry].slice(-100);
+    }
+
+    // Update lastInteraction
+    core.lastInteraction = entry.ts;
+
+    return write(KEYS.COMPANION_CORE, core);
+  },
 
   // ── Full reset ───────────────────────────────────────────────────
   clear: () => {

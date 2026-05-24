@@ -1,39 +1,38 @@
 // ================================================================
-// IMMORTAIL™ — MEDIA SCREEN
-// Feature-flag gated via storage.js SSOT.
-// Mounts CameraCapture, AudioRecorder, VideoUploader.
+// IMMORTAIL™ — MEDIA SCREEN (Run 3 upgrade)
+// Media events now fuse into companionCore.memory via ingestMedia().
+// Feature-flag gated via storage.js SSOT config.
 // ================================================================
 
-import React, { useState, useEffect } from 'react';
-import storage from '../core/storage.js';
-import { EventBus } from '../core/eventBus.js';
-import useConfig from '../hooks/useConfig.js';
-import CameraCapture from '../components/media/CameraCapture.jsx';
-import AudioRecorder from '../components/media/AudioRecorder.jsx';
-import VideoUploader from '../components/media/VideoUploader.jsx';
+import React, { useState } from 'react';
+import useConfig          from '../hooks/useConfig.js';
+import useCompanionCore   from '../hooks/useCompanionCore.js';
+import CameraCapture      from '../components/media/CameraCapture.jsx';
+import AudioRecorder      from '../components/media/AudioRecorder.jsx';
+import VideoUploader      from '../components/media/VideoUploader.jsx';
 
-const TABS = [
+const INPUT_TABS = [
   { id: 'image', label: '📷 Image', flag: 'imageInput' },
   { id: 'audio', label: '🎙️ Audio', flag: 'audioInput' },
   { id: 'video', label: '🎬 Video', flag: 'videoInput' },
 ];
 
 export default function MediaScreen() {
-  const { config }            = useConfig();
-  const features              = config.features ?? {};
-  const mediaEnabled          = features.mediaInput;
+  const { config }   = useConfig();
+  const features     = config.features ?? {};
+  const mediaEnabled = features.mediaInput;
 
-  const availableTabs = TABS.filter(t => features[t.flag]);
+  // Run 3: use companionCore for media memory
+  const { mediaMemory, ingestMedia } = useCompanionCore();
+
+  const availableTabs = INPUT_TABS.filter(t => features[t.flag]);
   const [activeTab, setActiveTab] = useState(availableTabs[0]?.id ?? 'image');
-  const [mediaList, setMediaList] = useState(() => storage.getMedia());
 
-  // Re-sync media list on new entries
-  useEffect(() => {
-    const unsub = EventBus.on('SYSTEM::MEDIA_ADDED', () => {
-      setMediaList(storage.getMedia());
-    });
-    return unsub;
-  }, []);
+  // ── Media ingestion: goes through companionCore (not standalone addMedia) ──
+  const handleCapture = (mediaEntry) => {
+    // 1. Fuse into unified memory timeline via companionCoreService
+    ingestMedia(mediaEntry);
+  };
 
   if (!mediaEnabled) {
     return (
@@ -49,13 +48,13 @@ export default function MediaScreen() {
     );
   }
 
-  const handleCapture = () => setMediaList(storage.getMedia());
-
   return (
     <div className="screen media-screen">
       <header className="screen-header">
         <h1>Media</h1>
-        <p className="screen-subtitle">{mediaList.length} item{mediaList.length !== 1 ? 's' : ''} captured</p>
+        <p className="screen-subtitle">
+          {mediaMemory.length} media moment{mediaMemory.length !== 1 ? 's' : ''} in timeline
+        </p>
       </header>
 
       {/* Tab selector */}
@@ -86,12 +85,12 @@ export default function MediaScreen() {
         )}
       </div>
 
-      {/* Media log */}
-      {mediaList.length > 0 && (
+      {/* Media memory log — reads from companionCore.mediaMemory */}
+      {mediaMemory.length > 0 && (
         <div className="media-log">
-          <h2 className="settings-label">Captured Media</h2>
+          <h2 className="settings-label">Media Memory</h2>
           <div className="media-log-list">
-            {[...mediaList].reverse().map(m => (
+            {[...mediaMemory].reverse().map(m => (
               <div key={m.id} className="media-log-card">
                 {m.type === 'image' && m.dataUrl && (
                   <img src={m.dataUrl} alt={m.label} className="media-thumb" />
@@ -99,7 +98,8 @@ export default function MediaScreen() {
                 <div className="media-log-info">
                   <p className="media-log-label">{m.label}</p>
                   <p className="media-log-meta">
-                    {m.type} · {new Date(m.createdAt).toLocaleTimeString()}
+                    {m.type} · {new Date(m.ts || m.createdAt).toLocaleTimeString()}
+                    {m.mood && ` · mood: ${m.mood}`}
                   </p>
                 </div>
                 <div className={`media-type-badge media-type-${m.type}`}>{m.type}</div>

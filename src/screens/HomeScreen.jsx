@@ -1,6 +1,26 @@
+// ================================================================
+// IMMORTAIL™ — HOME SCREEN (Run 3 upgrade)
+// Uses useCompanionCore for all state. Bridges companion interactions
+// into the unified core (identity + memory + emotional state).
+// ================================================================
+
 import React from 'react';
 import CompanionRenderer from '../components/CompanionRenderer.jsx';
-import useDog from '../hooks/useDog.js';
+import useCompanionCore, { MOOD }  from '../hooks/useCompanionCore.js';
+import { EMOTION }                 from '../core/dogService.js';
+
+// Map unified core MOOD → CompanionRenderer EMOTION keys
+const MOOD_TO_EMOTION = {
+  [MOOD.NEUTRAL]:  EMOTION.CALM,
+  [MOOD.HAPPY]:    EMOTION.HAPPY,
+  [MOOD.CURIOUS]:  EMOTION.CURIOUS,
+  [MOOD.PLAYFUL]:  EMOTION.HAPPY,
+  [MOOD.CALM]:     EMOTION.CALM,
+  [MOOD.ANXIOUS]:  EMOTION.CURIOUS,
+  [MOOD.TIRED]:    EMOTION.SLEEPY,
+  [MOOD.EXCITED]:  EMOTION.HAPPY,
+  [MOOD.WAITING]:  EMOTION.SLEEPY,
+};
 
 const INTERACTION_BUTTONS = [
   { type: 'pet',  icon: '🐾', label: 'Pet'  },
@@ -10,24 +30,26 @@ const INTERACTION_BUTTONS = [
 ];
 
 export default function HomeScreen() {
-  const { dog, interact } = useDog();
+  const { identity, memory, interact } = useCompanionCore();
+
+  const emotion = MOOD_TO_EMOTION[identity.mood] || EMOTION.CALM;
 
   return (
     <div className="screen home-screen">
       <header className="screen-header">
-        <h1 className="companion-name">{dog.name}</h1>
+        <h1 className="companion-name">{identity.name}</h1>
         <p className="companion-meta">
-          {dog.totalInteractions > 0
-            ? `${dog.totalInteractions} interaction${dog.totalInteractions !== 1 ? 's' : ''}`
+          {memory.length > 0
+            ? `${memory.length} moment${memory.length !== 1 ? 's' : ''} together`
             : 'Say hello 👋'}
         </p>
       </header>
 
       <div className="companion-stage">
         <CompanionRenderer
-          emotion={dog.emotion}
-          name={dog.name}
-          bonding={dog.bonding}
+          emotion={emotion}
+          name={identity.name}
+          bonding={Math.max(0, Math.min(100, identity.trust || 0))}
         />
       </div>
 

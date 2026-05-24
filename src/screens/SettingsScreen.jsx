@@ -6,7 +6,8 @@
 // ================================================================
 
 import React, { useState } from 'react';
-import useDog       from '../hooks/useDog.js';
+import useDog       from "../hooks/useDog.js";
+import useCompanionCore from "../hooks/useCompanionCore.js";
 import useConfig    from '../hooks/useConfig.js';
 import storage      from '../core/storage.js';
 
