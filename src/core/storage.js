@@ -94,6 +94,15 @@ export const DEFAULT_COMPANION_CORE = {
     arousal:   50,
     updatedAt: null,
   },
+  // Run 5: attachment graph — persists across all sessions
+  attachmentGraph: {
+    userBond:            0,    // 0-100: accumulated bonding score
+    familiarity:         0,    // 0-100: media + presence score
+    emotionalResonance:  0,    // 0-100: emotional event score
+    interactionCount:    0,    // total lifetime interaction count
+    lastSeen:            null, // timestamp of last session
+    bondStage:           'distant', // distant|familiar|trusted|bonded|deeply_bonded
+  },
   lastInteraction: null,
 };
 
@@ -237,8 +246,10 @@ export const storage = {
       emotionHistory: persisted.emotionHistory ?? [],
       memory:         persisted.memory         ?? [],
       mediaMemory:    persisted.mediaMemory     ?? [],
-      behaviourState: deepMerge(DEFAULT_COMPANION_CORE.behaviourState, persisted.behaviourState ?? {}),
-      emotionalState: deepMerge(DEFAULT_COMPANION_CORE.emotionalState, persisted.emotionalState ?? {}),
+      behaviourState:  deepMerge(DEFAULT_COMPANION_CORE.behaviourState,  persisted.behaviourState  ?? {}),
+      emotionalState:  deepMerge(DEFAULT_COMPANION_CORE.emotionalState,  persisted.emotionalState  ?? {}),
+      // Run 5: attachment graph — deepMerge preserves all accumulated values
+      attachmentGraph: deepMerge(DEFAULT_COMPANION_CORE.attachmentGraph, persisted.attachmentGraph ?? {}),
       lastInteraction: persisted.lastInteraction ?? null,
     };
   },
@@ -310,8 +321,9 @@ export const storage = {
 
     const entry = {
       ...event,
-      id:  event.id ?? genId(),
-      ts:  event.ts ?? Date.now(),
+      id:          event.id ?? genId(),
+      ts:          event.ts ?? Date.now(),
+      memoryWeight: event.memoryWeight ?? 1,   // Run 5: emotional weight 1-10
     };
 
     // Duplicate ID guard
@@ -350,6 +362,7 @@ export const storage = {
       'chat','pet','play','talk','rest',
       'image','audio','video',
       'emotion','milestone','system','interaction',
+      'reunion_event',   // Run 5: absence-return event
     ];
     if (!VALID_TYPES.includes(event.type)) {
       return { valid: false, reason: `unknown event type: "${event.type}"` };

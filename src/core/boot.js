@@ -11,6 +11,7 @@ import {
   applyIdleDecay,
   crossSessionConsistencyCheck,
 } from './companionCoreService.js';
+import { getAttachmentGraph } from './bondingEngine.js';
 
 export async function initializeApp() {
   const t0    = Date.now();
@@ -135,10 +136,11 @@ export async function initializeApp() {
       ok: true,
       duration,
       steps,
-      dog:    hydratedDog,
+      dog:             hydratedDog,
       core,
       config,
       consistency,
+      attachmentGraph: getAttachmentGraph(),   // Run 5
     };
     EventBus.emit(EVENTS.APP_READY, bootResult);
     log(15, true, `SYSTEM::APP_READY emitted (${duration}ms)`);

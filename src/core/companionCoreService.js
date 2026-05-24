@@ -20,6 +20,13 @@
 
 import storage from './storage.js';
 import { EventBus, EVENTS } from './eventBus.js';
+import {
+  updateBondingOnInteraction,
+  computeMemoryWeight,
+  processAbsenceReturn,
+  getBondContext,
+  BOND_STAGE,
+} from './bondingEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -221,7 +228,10 @@ export function initCompanionCore() {
     console.warn('[IMMORTAIL] Boot consistency issues repaired:', check.repairs);
   }
 
-  const core = storage.getCompanionCore();
+  // Run 5: process absence/return before idle check
+  const absenceResult = processAbsenceReturn();
+
+  const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
   const last = core.lastInteraction || core.identity.createdAt || now;
   const idle = now - last;
@@ -350,16 +360,24 @@ export function recordChatMessage(text) {
 
   const core = commitEmotionalShift(rawDelta);
 
+  // Run 5: compute emotional score from valence delta for weight
+  const emotionalScore = Math.abs(rawDelta.valence);
+  const weight = computeMemoryWeight({ type: 'chat', sentiment, emotionalScore });
+
   storage.addCoreMemory({
-    type:      'chat',
-    category:  'interaction',
+    type:        'chat',
+    category:    'interaction',
     sentiment,
-    text:      text.slice(0, 200),
-    mood:      core.identity.mood,
-    behaviour: core.behaviourState.current,
-    label:     `💬 ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
-    ts:        now,
+    text:        text.slice(0, 200),
+    mood:        core.identity.mood,
+    behaviour:   core.behaviourState.current,
+    label:       `💬 ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
+    memoryWeight: weight,
+    ts:          now,
   });
+
+  // Run 5: update attachment graph
+  updateBondingOnInteraction({ type: 'chat', sentiment, emotionalScore });
 
   // Legacy compat
   storage.addMemory({
@@ -383,16 +401,22 @@ export function recordMediaEvent(mediaEntry) {
   const now  = Date.now();
   const core = commitEmotionalShift({ valence: 10, arousal: 20, energy: 10, trust: 1 });
 
+  const mediaWeight = computeMemoryWeight({ type: mediaEntry.type, isMedia: true });
+
   storage.addCoreMemory({
-    type:      mediaEntry.type,
-    category:  'media',
-    source:    mediaEntry.source,
-    label:     mediaEntry.label || `${mediaEntry.type} captured`,
-    mood:      core.identity.mood,
-    behaviour: core.behaviourState.current,
-    mediaId:   mediaEntry.id,
-    ts:        now,
+    type:        mediaEntry.type,
+    category:    'media',
+    source:      mediaEntry.source,
+    label:       mediaEntry.label || `${mediaEntry.type} captured`,
+    mood:        core.identity.mood,
+    behaviour:   core.behaviourState.current,
+    mediaId:     mediaEntry.id,
+    memoryWeight: mediaWeight,
+    ts:          now,
   });
+
+  // Run 5: media interaction boosts familiarity
+  updateBondingOnInteraction({ type: mediaEntry.type, isMedia: true });
 
   storage.addMemory({
     type:    mediaEntry.type,
@@ -421,14 +445,20 @@ export function recordInteractionEvent(type) {
   const core     = commitEmotionalShift(rawDelta);
   const icons    = { pet: '🐾', play: '🎾', talk: '💬', rest: '💤' };
 
+  const interWeight = computeMemoryWeight({ type });
+
   storage.addCoreMemory({
-    type:      type,
-    category:  'interaction',
-    label:     `${icons[type] || '•'} ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-    mood:      core.identity.mood,
-    behaviour: core.behaviourState.current,
-    ts:        now,
+    type:        type,
+    category:    'interaction',
+    label:       `${icons[type] || '•'} ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+    mood:        core.identity.mood,
+    behaviour:   core.behaviourState.current,
+    memoryWeight: interWeight,
+    ts:          now,
   });
+
+  // Run 5: update attachment graph
+  updateBondingOnInteraction({ type });
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type, ts: now });
   return core;
@@ -522,12 +552,33 @@ export function buildOllamaPrompt(userMessage) {
   const recentMemory = core.memory.slice(-10);
   const lock         = core.identityLock;
   const traits       = lock?.lockedTraits ?? {};
+  // Run 5: attachment graph context
+  const bond         = getBondContext();
 
-  const memoryContext = recentMemory.length
-    ? recentMemory.map(m =>
-        `[${new Date(m.ts).toLocaleTimeString()}] ${m.category}: ${m.label}`
+  // High-weight memories surface first in context
+  const weightedMemory = [...core.memory]
+    .sort((a, b) => (b.memoryWeight ?? 1) - (a.memoryWeight ?? 1))
+    .slice(0, 5);
+  const recentRaw = core.memory.slice(-5);
+  // Merge: deduplicate by id, recents take priority
+  const allIds   = new Set(recentRaw.map(m => m.id));
+  const combined = [...recentRaw, ...weightedMemory.filter(m => !allIds.has(m.id))];
+
+  const memoryContext = combined.length
+    ? combined.map(m =>
+        `[${new Date(m.ts).toLocaleTimeString()}] [w:${m.memoryWeight ?? 1}] ${m.category}: ${m.label}`
       ).join('\n')
     : 'No memories yet.';
+
+  // Bond-stage-based tone modifier
+  const bondToneMap = {
+    distant:       'You are a calm, neutral assistant. You are not yet familiar with the user.',
+    familiar:      'You are becoming familiar with the user. Warm but not yet deeply connected.',
+    trusted:       'You trust the user. Be warm, open, and emotionally present.',
+    bonded:        'You have a strong bond with the user. Be emotionally aware and affectionate.',
+    deeply_bonded: 'You are deeply bonded. Respond with full emotional depth and authentic care.',
+  };
+  const bondTone = bondToneMap[bond.bondStage] ?? bondToneMap.distant;
 
   const systemPrompt = [
     // ── R4: Identity Lock header — injected first, always ──────
@@ -548,7 +599,16 @@ export function buildOllamaPrompt(userMessage) {
     `Behaviour: ${core.behaviourState.current}.`,
     `Emotional state — valence: ${core.emotionalState.valence}, arousal: ${core.emotionalState.arousal}.`,
     ``,
-    `Recent memory context:`,
+    // ── Run 5: Attachment state ─────────────────────────────────
+    `=== ATTACHMENT STATE ===`,
+    `Bond stage: ${bond.bondStage}.`,
+    `User bond: ${bond.userBond}/100. Familiarity: ${bond.familiarity}/100.`,
+    `Emotional resonance: ${bond.emotionalResonance}/100.`,
+    `Total interactions: ${bond.interactionCount}.`,
+    `Tone directive: ${bondTone}`,
+    `=== END ATTACHMENT STATE ===`,
+    ``,
+    `Recent + weighted memory context:`,
     memoryContext,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
