@@ -3,6 +3,7 @@ import React from 'react';
 const TABS = [
   { id: 'home',     label: 'Home',     icon: '🐾' },
   { id: 'memory',   label: 'Memory',   icon: '📖' },
+  { id: 'media',    label: 'Media',    icon: '📷' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
