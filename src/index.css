@@ -1,0 +1,100 @@
+/* ================================================================
+   IMMORTAIL™ — GLOBAL BASE STYLES
+   Reset + dark foundation + mobile-safe layout.
+   NO DESIGN SYSTEM. FOUNDATION ONLY.
+   ================================================================ */
+
+/* ── RESET ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── ROOT & HTML ── */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+/* ── BODY ── */
+body {
+  background-color: #020617;
+  color: #f8fafc;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height — mobile safe */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ── REACT ROOT ── */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── IMAGES ── */
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+/* ── LINKS ── */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ── INPUTS ── */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* ── LISTS ── */
+ul,
+ol {
+  list-style: none;
+}
+
+/* ── MOBILE SAFE TOUCH ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ── UTILITY: VISUALLY HIDDEN (accessibility) ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
