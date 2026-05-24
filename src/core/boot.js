@@ -1,6 +1,6 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 7)
-// Deterministic 26-step boot pipeline.
+// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 8)
+// Deterministic 29-step boot pipeline.
 //
 // BOOT ORDER:
 //  1.  validate environment
@@ -25,14 +25,17 @@
 //  20. synchronize companion runtime
 //  21. initialize media pipeline
 //  22. initialize reconstruction foundation
-//  23. initialize scheduler
-//  24. emit runtime initialized
-//  25. mount application
-//  26. emit APP_READY
+//  23. initialize renderer
+//  24. initialize scene manager
+//  25. initialize visualization systems
+//  26. initialize scheduler
+//  27. emit runtime initialized
+//  28. mount application
+//  29. emit APP_READY
 // ================================================================
 
-import { BOOT_STAGES, RUNTIME_EVENTS } from '../utils/constants.js';
-import { BootLogger }                   from '../utils/logger.js';
+import { BOOT_STAGES, RUNTIME_EVENTS }                           from '../utils/constants.js';
+import { BootLogger }                                             from '../utils/logger.js';
 
 // Core — Run 1
 import { validateEnvironment, validateRuntimeContracts }         from './validation.js';
@@ -90,11 +93,37 @@ import { initializeRoutineState, getRoutineEngineStatus }           from '../dog
 import { getDogState }                                              from '../state/dogState.js';
 
 // Media — Run 7
-import {
-  initializeUploadPipeline,
-  getPipelineStatus,
-}                                                                   from '../media/uploadPipeline.js';
+import { initializeUploadPipeline, getPipelineStatus }              from '../media/uploadPipeline.js';
 import { getIdentityProfileEngineStatus }                           from '../media/identityProfile.js';
+
+// 3D Engine — Run 8
+import {
+  initializeRenderer,
+  getRendererConfig,
+  PERFORMANCE_TIER,
+}                                                                   from '../3d/renderer.js';
+import {
+  initializeScene,
+  getSceneState,
+  LIGHTING_PRESET,
+  CAMERA_PRESET,
+}                                                                   from '../3d/sceneManager.js';
+import {
+  initializeMorphTargets,
+  getMorphEngineStatus,
+}                                                                   from '../3d/morphTargets.js';
+import {
+  initializeAnimationMixer,
+  getAnimationEngineStatus,
+}                                                                   from '../3d/animationMixer.js';
+import {
+  initializeTextureSystem,
+  getTextureSystemStatus,
+}                                                                   from '../3d/textureSystem.js';
+import {
+  initializeEmotionAnimations,
+  getEmotionAnimationEngineStatus,
+}                                                                   from '../3d/emotionAnimations.js';
 
 // ----------------------------------------------------------------
 // EXTENDED BOOT STAGES
@@ -119,6 +148,9 @@ const BOOT = {
   SYNCHRONIZING_COMPANION_RUNTIME:   'SYNCHRONIZING_COMPANION_RUNTIME',
   INITIALIZING_MEDIA_PIPELINE:       'INITIALIZING_MEDIA_PIPELINE',
   INITIALIZING_RECONSTRUCTION:       'INITIALIZING_RECONSTRUCTION',
+  INITIALIZING_RENDERER:             'INITIALIZING_RENDERER',
+  INITIALIZING_SCENE_MANAGER:        'INITIALIZING_SCENE_MANAGER',
+  INITIALIZING_VISUALIZATION:        'INITIALIZING_VISUALIZATION',
 };
 
 // ----------------------------------------------------------------
@@ -156,7 +188,7 @@ function emitRuntimeEvent(eventName, detail = {}) {
 // ----------------------------------------------------------------
 
 export async function initializeApp(onReady) {
-  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 7 — 26 Steps)');
+  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 8 — 29 Steps)');
   _bootState.startedAt = Date.now();
   BootLogger.info(`Boot started at: ${new Date(_bootState.startedAt).toISOString()}`);
 
@@ -251,7 +283,7 @@ export async function initializeApp(onReady) {
     const sessionState = getSessionState();
     if (sessionState.status === 'none' || sessionState.status === 'failed') {
       createSession({ bootRestored: true });
-      BootLogger.warn('[Boot] Session not restored — fresh session created.');
+      BootLogger.warn('[Boot] Fresh session created.');
     } else {
       BootLogger.info(`[Boot] Session: ${sessionState.sessionId} (${sessionState.status})`);
     }
@@ -293,34 +325,27 @@ export async function initializeApp(onReady) {
     await initializeMemoryAgent();
     await registerAgent(MEMORY_AGENT_DESCRIPTOR, memoryTaskHandler);
     registerActiveModule('memoryAgent', { initializedAt: Date.now() });
-
     await initializeEmotionAgent();
     await registerAgent(EMOTION_AGENT_DESCRIPTOR, emotionTaskHandler);
     registerActiveModule('emotionAgent', { initializedAt: Date.now() });
-
     await initializeDogAgent();
     await registerAgent(DOG_AGENT_DESCRIPTOR, dogTaskHandler);
     registerActiveModule('dogAgent', { initializedAt: Date.now() });
-
     await initializeConversationAgent();
     await registerAgent(CONVERSATION_AGENT_DESCRIPTOR, conversationTaskHandler);
     registerActiveModule('conversationAgent', { initializedAt: Date.now() });
-
     await initializeRoutineAgent();
     await registerAgent(ROUTINE_AGENT_DESCRIPTOR, routineTaskHandler);
     registerActiveModule('routineAgent', { initializedAt: Date.now() });
-
     await initializeRecoveryAgent();
     await registerAgent(RECOVERY_AGENT_DESCRIPTOR, recoveryTaskHandler);
     registerActiveModule('recoveryAgent', { initializedAt: Date.now() });
-
-    BootLogger.info('All specialized agents registered.');
+    BootLogger.info('All agents registered.');
 
     // ── STEP 19 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_COMPANION_ENGINES);
-    const dogState   = getDogState();
-    const profileId  = dogState.profileId;
-
+    const dogState  = getDogState();
+    const profileId = dogState.profileId;
     if (profileId) {
       initializePersonalityProfile(profileId);
       initializeEmotionState(profileId);
@@ -330,64 +355,98 @@ export async function initializeApp(onReady) {
       initializeRoutineState(profileId);
       BootLogger.info(`[Boot] Companion engines initialized for profile: ${profileId}`);
     } else {
-      BootLogger.info('[Boot] No dog profile loaded — companion engines on standby.');
+      BootLogger.info('[Boot] No dog profile — companion engines on standby.');
     }
-
-    registerActiveModule('companionEngines', {
-      initializedAt: Date.now(),
-      profileId:     profileId || null,
-    });
+    registerActiveModule('companionEngines', { initializedAt: Date.now(), profileId: profileId || null });
 
     // ── STEP 20 ───────────────────────────────────────────────────
     setStage(BOOT.SYNCHRONIZING_COMPANION_RUNTIME);
-    const engineStatus = {
-      personality: getPersonalityEngineStatus(),
-      emotion:     getEmotionEngineStatus(),
-      memory:      getMemoryEngineStatus(),
-      behavior:    getBehaviorEngineStatus(),
-      bonding:     getBondingEngineStatus(),
-      routine:     getRoutineEngineStatus(),
-    };
     updateAppState({
       activeModules: {
         companionRuntime: {
           synchronized:   true,
           profileId:      profileId || null,
-          engineStatus,
+          engineStatus: {
+            personality: getPersonalityEngineStatus(),
+            emotion:     getEmotionEngineStatus(),
+            memory:      getMemoryEngineStatus(),
+            behavior:    getBehaviorEngineStatus(),
+            bonding:     getBondingEngineStatus(),
+            routine:     getRoutineEngineStatus(),
+          },
           synchronizedAt: Date.now(),
         },
       },
     });
     BootLogger.info('[Boot] Companion runtime synchronized.');
 
-    // ── STEP 21: Initialize Media Pipeline ───────────────────────
+    // ── STEP 21 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_MEDIA_PIPELINE);
     initializeUploadPipeline();
-    const pipelineStatus = getPipelineStatus();
-    registerActiveModule('uploadPipeline', {
-      initializedAt: Date.now(),
-      status:        pipelineStatus,
-    });
-    BootLogger.info('[Boot] Media ingestion pipeline initialized.');
+    registerActiveModule('uploadPipeline', { initializedAt: Date.now() });
+    BootLogger.info('[Boot] Media pipeline initialized.');
 
-    // ── STEP 22: Initialize Reconstruction Foundation ─────────────
+    // ── STEP 22 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_RECONSTRUCTION);
     const identityStatus = getIdentityProfileEngineStatus();
     registerActiveModule('identityProfileEngine', {
-      initializedAt:  Date.now(),
-      totalProfiles:  identityStatus.totalProfiles,
+      initializedAt: Date.now(),
+      totalProfiles: identityStatus.totalProfiles,
     });
+    BootLogger.info('[Boot] Reconstruction foundation ready.');
+
+    // ── STEP 23: Initialize Renderer ──────────────────────────────
+    setStage(BOOT.INITIALIZING_RENDERER);
+    const rendererConfig = initializeRenderer();
+    registerActiveModule('renderer', {
+      initializedAt:   Date.now(),
+      performanceTier: rendererConfig.performanceTier,
+    });
+    BootLogger.info(`[Boot] Renderer initialized — tier: ${rendererConfig.performanceTier}`);
+
+    // ── STEP 24: Initialize Scene Manager ─────────────────────────
+    setStage(BOOT.INITIALIZING_SCENE_MANAGER);
+    const sceneConfig = initializeScene({
+      lightingPreset: LIGHTING_PRESET.NEUTRAL,
+      cameraPreset:   CAMERA_PRESET.DEFAULT,
+    });
+    registerActiveModule('sceneManager', {
+      initializedAt:  Date.now(),
+      lighting:       sceneConfig.lightingPreset,
+      camera:         sceneConfig.cameraPreset,
+    });
+    BootLogger.info('[Boot] Scene manager initialized.');
+
+    // ── STEP 25: Initialize Visualization Systems ─────────────────
+    setStage(BOOT.INITIALIZING_VISUALIZATION);
+    const visProfileId = profileId || 'standby';
+
+    initializeMorphTargets(visProfileId);
+    registerActiveModule('morphTargets', { initializedAt: Date.now(), profileId: visProfileId });
+
+    initializeAnimationMixer(visProfileId);
+    registerActiveModule('animationMixer', { initializedAt: Date.now(), profileId: visProfileId });
+
+    initializeTextureSystem();
+    registerActiveModule('textureSystem', {
+      initializedAt: Date.now(),
+      status: getTextureSystemStatus(),
+    });
+
+    initializeEmotionAnimations(visProfileId);
+    registerActiveModule('emotionAnimations', { initializedAt: Date.now(), profileId: visProfileId });
+
     BootLogger.info(
-      `[Boot] Identity reconstruction foundation ready — ` +
-      `${identityStatus.totalProfiles} profile(s) in registry.`
+      `[Boot] Visualization systems initialized — ` +
+      `morphTargets ✓, animationMixer ✓, textureSystem ✓, emotionAnimations ✓`
     );
 
-    // ── STEP 23 ───────────────────────────────────────────────────
+    // ── STEP 26 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_SCHEDULER);
     initializeScheduler();
     updateAppState({ flags: { schedulerReady: true } });
 
-    // ── STEP 24 ───────────────────────────────────────────────────
+    // ── STEP 27 ───────────────────────────────────────────────────
     setStage(BOOT.EMITTING_RUNTIME_INITIALIZED);
     markRuntimeReady();
     markBootComplete();
@@ -400,14 +459,14 @@ export async function initializeApp(onReady) {
       runtimeState: getCoreRuntimeState(),
     });
 
-    // ── STEP 25 ───────────────────────────────────────────────────
+    // ── STEP 28 ───────────────────────────────────────────────────
     setStage(BOOT.MOUNTING_APPLICATION);
     BootLogger.info('Handing off to application mount...');
     if (typeof onReady === 'function') {
       await onReady();
     }
 
-    // ── STEP 26 ───────────────────────────────────────────────────
+    // ── STEP 29 ───────────────────────────────────────────────────
     setStage(BOOT.APP_READY);
     _bootState.completedAt = Date.now();
     emitRuntimeEvent(RUNTIME_EVENTS.APP_READY, {
