@@ -128,6 +128,25 @@ export const DEFAULT_COMPANION_CORE = {
     idleBehaviourState:   'breathing', // breathing|head_turn|tail_wag|stretch
     embodimentVersion:    'V1',
   },
+  // Run 8: life simulation — daily cycle, passive behaviours, ambient mood
+  lifeSimulation: {
+    currentRoutine:              'idle',   // idle|morning|active|relaxed|sleepy|sleeping
+    dailyCycleState:             'awake',  // awake|morning|active|relaxed|sleepy|sleeping
+    passiveActivities:           [],       // capped-20 log of passive behaviour events
+    routineHistory:              [],       // capped-100 log of autonomous state entries
+    autonomousState:             {
+      mode:           'passive',           // passive|observing|resting|sleeping|excited
+      enteredAt:      null,               // timestamp of last mode entry
+      cooldownUntil:  null,               // no transition allowed before this ts
+    },
+    sleepState: {
+      isSleeping:     false,
+      enteredSleepAt: null,
+      sleepDuration:  0,                  // ms
+    },
+    ambientMood:                 'calm',  // calm|playful|sleepy|curious|relaxed|attentive
+    lastAutonomousTransition:    null,    // timestamp
+  },
   lastInteraction: null,
 };
 
@@ -279,6 +298,8 @@ export const storage = {
       evolutionLayer:  deepMerge(DEFAULT_COMPANION_CORE.evolutionLayer,  persisted.evolutionLayer  ?? {}),
       // Run 7: embodiment — deepMerge preserves all visual state
       embodiment:      deepMerge(DEFAULT_COMPANION_CORE.embodiment,      persisted.embodiment      ?? {}),
+      // Run 8: life simulation — deepMerge preserves all routine/mood state
+      lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
       lastInteraction: persisted.lastInteraction ?? null,
     };
   },

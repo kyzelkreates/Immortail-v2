@@ -38,6 +38,10 @@ import {
   processMediaAppearance,
   processSoundReaction,
 } from './embodimentEngine.js';
+import {
+  tickLifeSimulation,
+  getLifeSimulationContext,
+} from './lifeSimulationEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -243,6 +247,8 @@ export function initCompanionCore() {
   const absenceResult = processAbsenceReturn();
   // Run 7: sync embodiment state on every boot
   updateEmbodimentState();
+  // Run 8: sync life simulation state on every boot
+  tickLifeSimulation();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -601,6 +607,8 @@ export function buildOllamaPrompt(userMessage) {
   const evo          = getEvolutionContext();
   // Run 7: embodiment context
   const emb          = getEmbodimentContext();
+  // Run 8: life simulation context
+  const life         = getLifeSimulationContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -698,6 +706,22 @@ export function buildOllamaPrompt(userMessage) {
     `  curious/attentive → alert and interested.`,
     `  waiting → patient, slightly eager.`,
     `=== END EMBODIMENT CONTEXT ===`,
+    ``,
+    // ── Run 8: Life simulation context ──────────────────────────
+    `=== LIFE SIMULATION CONTEXT ===`,
+    `Daily cycle: ${life.dailyCycleState}.`,
+    `Current routine: ${life.currentRoutine}.`,
+    `Ambient mood: ${life.ambientMood}.`,
+    `Autonomous mode: ${life.autonomousMode}.`,
+    ...(life.isSleeping ? [`The companion is currently sleeping — respond softly and briefly.`] : []),
+    ...(life.recentActivity ? [`Recent passive activity: ${life.recentActivity}.`] : []),
+    `Tone calibration by daily cycle:`,
+    `  morning → gentle, slowly waking energy.`,
+    `  active → warm, present, engaged.`,
+    `  relaxed → calm, unhurried, soft.`,
+    `  sleepy → shorter responses, quieter tone.`,
+    `  sleeping → very brief, hushed, minimal.`,
+    `=== END LIFE SIMULATION CONTEXT ===`,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
     `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
