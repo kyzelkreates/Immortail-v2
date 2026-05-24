@@ -1,6 +1,6 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 8)
-// Deterministic 29-step boot pipeline.
+// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 10 — Final)
+// Deterministic 34-step boot pipeline.
 //
 // BOOT ORDER:
 //  1.  validate environment
@@ -29,9 +29,15 @@
 //  24. initialize scene manager
 //  25. initialize visualization systems
 //  26. initialize scheduler
-//  27. emit runtime initialized
-//  28. mount application
-//  29. emit APP_READY
+//  26. initialize UI shell
+//  27. initialize scheduler
+//  28. initialize integration layer
+//  29. run system health checks
+//  30. validate dependency graph
+//  31. finalize boot
+//  32. emit runtime initialized
+//  33. mount application
+//  34. emit APP_READY
 // ================================================================
 
 import { BOOT_STAGES, RUNTIME_EVENTS }                           from '../utils/constants.js';
@@ -125,6 +131,30 @@ import {
   getEmotionAnimationEngineStatus,
 }                                                                   from '../3d/emotionAnimations.js';
 
+// Integration Layer — Run 10
+import {
+  initializeIntegrationLayer,
+  validateSystemGraph,
+  runIntegrationValidation,
+  getIntegrationStatus,
+}                                                                   from './integration.js';
+import {
+  confirmBootStep,
+  finalizeBoot,
+  validateBootCompletion,
+  getBootFinalizerStatus,
+}                                                                   from './bootFinalizer.js';
+import {
+  runHealthCheck   as runSystemHealthCheck,
+  getSystemHealthStatus,
+}                                                                   from './systemHealth.js';
+import {
+  validateDependencies,
+  detectCircularDependencies,
+  getDependencyGraphStatus,
+}                                                                   from './dependencyGraph.js';
+
+
 // ----------------------------------------------------------------
 // EXTENDED BOOT STAGES
 // ----------------------------------------------------------------
@@ -151,6 +181,11 @@ const BOOT = {
   INITIALIZING_RENDERER:             'INITIALIZING_RENDERER',
   INITIALIZING_SCENE_MANAGER:        'INITIALIZING_SCENE_MANAGER',
   INITIALIZING_VISUALIZATION:        'INITIALIZING_VISUALIZATION',
+  INITIALIZING_UI_SHELL:             'INITIALIZING_UI_SHELL',
+  INITIALIZING_INTEGRATION_LAYER:    'INITIALIZING_INTEGRATION_LAYER',
+  RUNNING_HEALTH_CHECKS:             'RUNNING_HEALTH_CHECKS',
+  VALIDATING_DEPENDENCY_GRAPH:       'VALIDATING_DEPENDENCY_GRAPH',
+  FINALIZING_BOOT:                   'FINALIZING_BOOT',
 };
 
 // ----------------------------------------------------------------
@@ -441,12 +476,101 @@ export async function initializeApp(onReady) {
       `morphTargets ✓, animationMixer ✓, textureSystem ✓, emotionAnimations ✓`
     );
 
-    // ── STEP 26 ───────────────────────────────────────────────────
+
+    // ── Confirm Run 1-9 boot steps for finalizer tracking ───────────
+    const _earlySteps = [
+      'validate_environment','initialize_runtime','validate_runtime_contracts',
+      'initialize_storage','validate_schemas','run_migrations',
+      'initialize_state_layer','initialize_event_system','register_event_contracts',
+      'initialize_hydration_system','hydrate_runtime_state','initialize_recovery_engine',
+      'restore_active_sessions','register_services','initialize_agent_registry',
+      'initialize_lifecycle_controller','initialize_supervisor_agent','register_specialized_agents',
+      'initialize_companion_engines','synchronize_companion_runtime',
+      'initialize_media_pipeline','initialize_reconstruction_foundation',
+      'initialize_renderer','initialize_scene_manager','initialize_visualization_systems',
+    ];
+    for (const s of _earlySteps) confirmBootStep(s);
+    // ── STEP 26: Initialize UI Shell ────────────────────────────────
+    setStage(BOOT.INITIALIZING_UI_SHELL);
+    // UI shell is mounted by React — confirm it is registered
+    const rootEl = typeof document !== 'undefined' ? document.getElementById('root') : null;
+    registerActiveModule('uiShell', { initializedAt: Date.now(), rootPresent: !!rootEl });
+    confirmBootStep('initialize_ui_shell');
+    BootLogger.info(`[Boot] UI shell confirmed — rootPresent: ${!!rootEl}`);
+
+    // ── STEP 27: Initialize Scheduler ────────────────────────────────
     setStage(BOOT.INITIALIZING_SCHEDULER);
     initializeScheduler();
     updateAppState({ flags: { schedulerReady: true } });
+    confirmBootStep('initialize_scheduler');
 
-    // ── STEP 27 ───────────────────────────────────────────────────
+    // ── STEP 28: Initialize Integration Layer ────────────────────────
+    setStage(BOOT.INITIALIZING_INTEGRATION_LAYER);
+    const currentAppState     = (await import('../state/appState.js')).getAppState();
+    const currentRuntimeState = getCoreRuntimeState();
+    const currentDogState     = (await import('../state/dogState.js')).getDogState();
+    const currentSessionState = (await import('../state/sessionState.js')).getSessionState();
+
+    await initializeIntegrationLayer({
+      stateRefs: {
+        appState:     currentAppState,
+        runtimeState: currentRuntimeState,
+        dogState:     currentDogState,
+        sessionState: currentSessionState,
+      },
+    });
+    registerActiveModule('integrationLayer', { initializedAt: Date.now() });
+    confirmBootStep('initialize_integration_layer');
+    BootLogger.info('[Boot] Integration layer initialized.');
+
+    // ── STEP 29: Run System Health Checks ────────────────────────────
+    setStage(BOOT.RUNNING_HEALTH_CHECKS);
+    const healthStatus = runSystemHealthCheck();
+    registerActiveModule('systemHealth', {
+      initializedAt: Date.now(),
+      overall: healthStatus.overallStatus,
+    });
+    confirmBootStep('run_system_health_checks');
+    BootLogger.info(`[Boot] Health checks complete — overall: ${healthStatus.overallStatus}`);
+
+    // ── STEP 30: Validate Dependency Graph ───────────────────────────
+    setStage(BOOT.VALIDATING_DEPENDENCY_GRAPH);
+    const graphValidation = validateSystemGraph();
+    if (!graphValidation.valid) {
+      BootLogger.warn(
+        `[Boot] Dependency graph warnings: ${graphValidation.errors.join(' | ')}`
+      );
+    }
+    const circularCheck = detectCircularDependencies();
+    if (circularCheck.circular) {
+      throw new Error(
+        `Circular dependencies detected: ${circularCheck.cycles.map(c=>c.join('→')).join(' | ')}`
+      );
+    }
+    registerActiveModule('dependencyGraph', {
+      initializedAt: Date.now(),
+      valid: graphValidation.valid,
+      nodeCount: getDependencyGraphStatus().nodeCount,
+    });
+    confirmBootStep('validate_dependency_graph');
+    BootLogger.info(`[Boot] Dependency graph valid — ${getDependencyGraphStatus().nodeCount} nodes.`);
+
+    // ── STEP 31: Finalize Boot ────────────────────────────────────────
+    setStage(BOOT.FINALIZING_BOOT);
+    confirmBootStep('finalize_boot');
+    const finalizationResult = finalizeBoot({ requireAllSteps: false, skipHealthCheck: false });
+    if (!finalizationResult.success) {
+      BootLogger.warn(
+        `[Boot] Boot finalization warnings: ${finalizationResult.report.errors.join(' | ')}`
+      );
+    }
+    registerActiveModule('bootFinalizer', {
+      initializedAt: Date.now(),
+      success: finalizationResult.success,
+    });
+    BootLogger.info(`[Boot] Boot finalized — success: ${finalizationResult.success}`);
+
+    // ── STEP 32: Emit Runtime Initialized ────────────────────────────
     setStage(BOOT.EMITTING_RUNTIME_INITIALIZED);
     markRuntimeReady();
     markBootComplete();
@@ -455,19 +579,22 @@ export async function initializeApp(onReady) {
       flags:  { storageReady: true },
       timestamps: { bootCompletedAt: Date.now() },
     });
+    confirmBootStep('emit_runtime_initialized');
     emitRuntimeEvent(RUNTIME_EVENTS.RUNTIME_INITIALIZED, {
       runtimeState: getCoreRuntimeState(),
     });
 
-    // ── STEP 28 ───────────────────────────────────────────────────
+    // ── STEP 33: Mount Application ────────────────────────────────────
     setStage(BOOT.MOUNTING_APPLICATION);
     BootLogger.info('Handing off to application mount...');
+    confirmBootStep('mount_application');
     if (typeof onReady === 'function') {
       await onReady();
     }
 
-    // ── STEP 29 ───────────────────────────────────────────────────
+    // ── STEP 34: Emit APP_READY ───────────────────────────────────────
     setStage(BOOT.APP_READY);
+    confirmBootStep('emit_app_ready');
     _bootState.completedAt = Date.now();
     emitRuntimeEvent(RUNTIME_EVENTS.APP_READY, {
       duration: _bootState.completedAt - _bootState.startedAt,
