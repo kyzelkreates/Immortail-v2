@@ -1,6 +1,6 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 10 — Final)
-// Deterministic 34-step boot pipeline.
+// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 10 — Event Unification Patch)
+// Deterministic 34-step boot pipeline. All events emit via bridgeDispatch → canonical SYSTEM:: keys.
 //
 // BOOT ORDER:
 //  1.  validate environment
@@ -131,6 +131,15 @@ import {
   getEmotionAnimationEngineStatus,
 }                                                                   from '../3d/emotionAnimations.js';
 
+// Event Unification — Bridge + canonical types
+import { bridgeDispatch }                                           from '../events/eventBridge.js';
+import {
+  SYSTEM_EVENTS as _SE,
+  DOG_EVENTS    as _DE,
+  MEMORY_EVENTS as _ME,
+  EMOTION_EVENTS as _EE,
+}                                                                   from '../events/eventTypes.js';
+
 // Integration Layer — Run 10
 import {
   initializeIntegrationLayer,
@@ -212,10 +221,21 @@ function setStage(stage) {
 }
 
 function emitRuntimeEvent(eventName, detail = {}) {
-  if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(eventName, { detail }));
-    BootLogger.info(`DOM event emitted: ${eventName}`);
-  }
+  // Resolve to canonical SYSTEM:: key via bridge, then dispatch DOM + bus
+  bridgeDispatch(eventName, detail, _busEmit);
+  BootLogger.info(`Event emitted (canonical): ${eventName}`);
+}
+
+// Late-bound bus emit — avoids circular import issues at module init time
+function _busEmit(canonicalType, payload) {
+  // Dynamic import of emit to avoid top-level circular init
+  import('../events/eventBus.js').then(({ emit, isInitialized }) => {
+    if (isInitialized()) {
+      emit(canonicalType, payload).catch(err =>
+        BootLogger.warn(`[Boot] Bus emit failed for "${canonicalType}": ${err.message}`)
+      );
+    }
+  }).catch(() => {}); // bus not available — DOM event already dispatched
 }
 
 // ----------------------------------------------------------------
@@ -580,7 +600,7 @@ export async function initializeApp(onReady) {
       timestamps: { bootCompletedAt: Date.now() },
     });
     confirmBootStep('emit_runtime_initialized');
-    emitRuntimeEvent(RUNTIME_EVENTS.RUNTIME_INITIALIZED, {
+    emitRuntimeEvent(_SE.RUNTIME_INITIALIZED, {
       runtimeState: getCoreRuntimeState(),
     });
 
@@ -596,7 +616,7 @@ export async function initializeApp(onReady) {
     setStage(BOOT.APP_READY);
     confirmBootStep('emit_app_ready');
     _bootState.completedAt = Date.now();
-    emitRuntimeEvent(RUNTIME_EVENTS.APP_READY, {
+    emitRuntimeEvent(_SE.APP_READY, {
       duration: _bootState.completedAt - _bootState.startedAt,
     });
     BootLogger.info(`Boot COMPLETE — ${_bootState.completedAt - _bootState.startedAt}ms`);
@@ -605,7 +625,7 @@ export async function initializeApp(onReady) {
     _bootState.stage = BOOT.FATAL_ERROR;
     _bootState.error = { message: err.message, stack: err.stack };
     setRuntimeError(err);
-    emitRuntimeEvent(RUNTIME_EVENTS.BOOT_FAILED, { error: err.message });
+    emitRuntimeEvent(_SE.BOOT_FAILED || 'SYSTEM::BOOT_FAILED', { error: err.message });
     BootLogger.error(`FATAL BOOT ERROR at [${_bootState.stage}]: ${err.message}`);
     BootLogger.error(err.stack || '(no stack)');
   } finally {

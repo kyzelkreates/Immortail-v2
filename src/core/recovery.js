@@ -4,7 +4,7 @@
 // NO STORAGE DIRECT ACCESS — routes through storageService.
 // ================================================================
 
-import { RECOVERY_STATUS, RUNTIME_EVENTS } from '../utils/constants.js';
+import { RECOVERY_STATUS, SYSTEM_EVENTS } from '../utils/constants.js';
 import { RecoveryLogger } from '../utils/logger.js';
 import { updateRuntimeState as updateCoreRuntime, setRuntimeDegraded } from './runtime.js';
 import { updateAppState }      from '../state/appState.js';

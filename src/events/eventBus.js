@@ -1,12 +1,14 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL EVENT BUS
+// IMMORTAIL™ — CENTRAL EVENT BUS (Event Unification Patch)
 // SSOT: All cross-system communication flows through here.
+// All event types normalized to canonical namespace via eventBridge.
 // NO BUSINESS LOGIC. NO STORAGE ACCESS. NO STATE MUTATION.
 // ================================================================
 
 import { SystemLogger }                       from '../utils/logger.js';
 import { isKnownEvent }                       from './eventTypes.js';
 import { validateEventPayload, findEventContract } from './eventRegistry.js';
+import { normalizeEventType }                 from './eventBridge.js';
 
 const BusLogger = SystemLogger;
 
@@ -82,6 +84,7 @@ export function initializeEventBus(options = {}) {
  * @returns {Function} unsubscribe function
  */
 export function subscribe(eventType, fn, options = {}) {
+  eventType = normalizeEventType(eventType);
   _assertKnown(eventType);
   _assertFunction(fn, 'subscribe');
   _assertInitialized();
@@ -135,6 +138,7 @@ export function unsubscribe(eventType, listenerId) {
  * @returns {Function} unsubscribe (if you want to cancel early)
  */
 export function once(eventType, fn, options = {}) {
+  eventType = normalizeEventType(eventType);
   _assertKnown(eventType);
   _assertFunction(fn, 'once');
   _assertInitialized();
@@ -170,6 +174,7 @@ export function once(eventType, fn, options = {}) {
  * @returns {Promise<void>}
  */
 export async function emit(eventType, payload = {}) {
+  eventType = normalizeEventType(eventType);
   _assertKnown(eventType);
   _assertInitialized();
 
@@ -267,6 +272,7 @@ export function emitSync(eventType, payload = {}) {
  */
 export function clearListeners(eventType) {
   if (eventType) {
+    eventType = normalizeEventType(eventType);
     _assertKnown(eventType);
     const map = _listeners.get(eventType);
     if (map) {
