@@ -1,181 +1,203 @@
 // ================================================================
-// IMMORTAIL™ — APPLICATION SHELL
-// Minimal foundation visualization only.
+// IMMORTAIL™ — APPLICATION SHELL (Run 3 — State Layer Visualization)
+// Foundation visualization: runtime, state, hydration, session.
 // NO DASHBOARD. NO DOG UI. NO CHAT. NO FEATURES.
 // ================================================================
 
 import React, { useState, useEffect } from 'react';
-import { getRuntimeState } from './core/runtime.js';
-import { getBootState } from './core/boot.js';
+
+// Core
+import { getRuntimeState as getCoreRuntimeState } from './core/runtime.js';
+import { getBootState }                           from './core/boot.js';
+import { getHydrationState }                      from './core/hydration.js';
+import { getRecoveryState }                       from './core/recovery.js';
+
+// State layer
+import { getAppState, subscribeToAppState }         from './state/appState.js';
+import { getRuntimeState, subscribeToRuntimeState } from './state/runtimeState.js';
+import { getSessionState, subscribeToSessionState } from './state/sessionState.js';
+
 import { BOOT_STAGES, RUNTIME_STATUS } from './utils/constants.js';
 
 // ----------------------------------------------------------------
-// HELPERS
+// STATUS BADGE COMPONENT
 // ----------------------------------------------------------------
 
 function StatusBadge({ label, value, type = 'default' }) {
   const colors = {
     success: '#22c55e',
-    error: '#ef4444',
-    warn: '#f59e0b',
+    error:   '#ef4444',
+    warn:    '#f59e0b',
+    info:    '#60a5fa',
     default: '#94a3b8',
-    info: '#60a5fa',
   };
-
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px 0',
-      borderBottom: '1px solid #1e293b',
+      display: 'flex', alignItems: 'center', gap: '8px',
+      padding: '5px 0', borderBottom: '1px solid #1e293b',
     }}>
-      <span style={{ color: '#64748b', fontSize: '11px', minWidth: '160px', letterSpacing: '0.05em' }}>
+      <span style={{ color: '#64748b', fontSize: '11px', minWidth: '170px', letterSpacing: '0.05em' }}>
         {label}
       </span>
-      <span style={{
-        color: colors[type],
-        fontSize: '12px',
-        fontFamily: 'monospace',
-        fontWeight: 600,
-      }}>
-        {value}
+      <span style={{ color: colors[type], fontSize: '11px', fontFamily: 'monospace', fontWeight: 600 }}>
+        {String(value ?? '—')}
       </span>
     </div>
   );
 }
+
+function SectionLabel({ label, color = '#334155' }) {
+  return (
+    <p style={{
+      fontSize: '9px', color, letterSpacing: '0.12em',
+      fontWeight: 700, margin: '16px 0 6px 0',
+    }}>
+      {label}
+    </p>
+  );
+}
+
+const Divider = () => (
+  <div style={{ height: '1px', background: '#1e293b', margin: '12px 0 4px 0' }} />
+);
 
 // ----------------------------------------------------------------
 // APP COMPONENT
 // ----------------------------------------------------------------
 
 export default function App() {
-  const [runtimeState, setRuntimeState] = useState(null);
-  const [bootState, setBootState] = useState(null);
-  const [tick, setTick] = useState(0);
+  const [coreRuntime, setCoreRuntime]   = useState(() => getCoreRuntimeState());
+  const [bootState, setBootState]       = useState(() => getBootState());
+  const [appState, setAppState]         = useState(() => getAppState());
+  const [runtimeState, setRuntimeState] = useState(() => getRuntimeState());
+  const [sessionState, setSessionState] = useState(() => getSessionState());
+  const [hydrationState, setHydrationState] = useState(() => getHydrationState());
 
   useEffect(() => {
-    // Poll runtime/boot state — lightweight, foundation only.
-    const interval = setInterval(() => {
-      setRuntimeState(getRuntimeState());
+    // Subscribe to reactive state updates
+    const unsubApp     = subscribeToAppState((next)     => setAppState(next));
+    const unsubRuntime = subscribeToRuntimeState((next) => setRuntimeState(next));
+    const unsubSession = subscribeToSessionState((next) => setSessionState(next));
+
+    // Poll core + hydration (no subscription API on core.runtime.js)
+    const poll = setInterval(() => {
+      setCoreRuntime(getCoreRuntimeState());
       setBootState(getBootState());
-      setTick((t) => t + 1);
-    }, 500);
+      setHydrationState(getHydrationState());
+    }, 750);
 
-    // Initial read
-    setRuntimeState(getRuntimeState());
-    setBootState(getBootState());
-
-    return () => clearInterval(interval);
+    return () => {
+      unsubApp();
+      unsubRuntime();
+      unsubSession();
+      clearInterval(poll);
+    };
   }, []);
 
-  const isCrashed = runtimeState?.status === RUNTIME_STATUS.CRASHED;
-  const isReady = runtimeState?.status === RUNTIME_STATUS.READY;
-  const isBooting = runtimeState?.status === RUNTIME_STATUS.BOOTING;
-  const currentStage = bootState?.stage || BOOT_STAGES.IDLE;
+  const isCrashed = coreRuntime?.status === RUNTIME_STATUS.CRASHED;
+  const isReady   = coreRuntime?.status === RUNTIME_STATUS.READY;
+  const isBooting = coreRuntime?.status === RUNTIME_STATUS.BOOTING;
+  const stage     = bootState?.stage || 'IDLE';
 
-  // ── FATAL ERROR STATE ──
+  // ── FATAL ERROR ──────────────────────────────────────────────
   if (isCrashed) {
     return (
       <div style={styles.container}>
         <div style={styles.panel}>
-          <div style={{ ...styles.statusIndicator, background: '#ef4444' }} />
+          <div style={{ ...styles.dot, background: '#ef4444' }} />
           <h1 style={{ ...styles.title, color: '#ef4444' }}>FATAL ERROR</h1>
-          <p style={styles.subtitle}>Runtime initialization failed.</p>
-          <div style={styles.divider} />
-          <StatusBadge label="STAGE" value={currentStage} type="error" />
-          <StatusBadge
-            label="ERROR"
-            value={bootState?.error?.message || 'Unknown error'}
-            type="error"
-          />
-          <StatusBadge label="STATUS" value={runtimeState?.status} type="error" />
+          <p style={styles.subtitle}>Boot pipeline failed.</p>
+          <Divider />
+          <StatusBadge label="STAGE"   value={stage}                            type="error" />
+          <StatusBadge label="ERROR"   value={bootState?.error?.message}        type="error" />
+          <StatusBadge label="STATUS"  value={coreRuntime?.status}              type="error" />
         </div>
       </div>
     );
   }
 
-  // ── BOOTING STATE ──
-  if (isBooting || !runtimeState) {
+  // ── BOOTING ──────────────────────────────────────────────────
+  if (isBooting || !coreRuntime || coreRuntime.status === 'UNINITIALIZED') {
     return (
       <div style={styles.container}>
         <div style={styles.panel}>
-          <div style={{ ...styles.statusIndicator, background: '#f59e0b', animation: 'pulse 1.2s infinite' }} />
+          <div style={{ ...styles.dot, background: '#f59e0b' }} />
           <h1 style={{ ...styles.title, color: '#f59e0b' }}>INITIALIZING</h1>
-          <p style={styles.subtitle}>Runtime boot pipeline running...</p>
-          <div style={styles.divider} />
-          <StatusBadge label="STAGE" value={currentStage} type="warn" />
-          <StatusBadge label="STATUS" value={runtimeState?.status || 'PENDING'} type="warn" />
+          <p style={styles.subtitle}>Boot pipeline running...</p>
+          <Divider />
+          <StatusBadge label="STAGE"   value={stage}                type="warn" />
+          <StatusBadge label="STATUS"  value={coreRuntime?.status}  type="warn" />
         </div>
       </div>
     );
   }
 
-  // ── READY STATE ──
+  // ── READY ─────────────────────────────────────────────────────
   return (
     <div style={styles.container}>
       <div style={styles.panel}>
-        <div style={{ ...styles.statusIndicator, background: '#22c55e' }} />
+        <div style={{ ...styles.dot, background: '#22c55e' }} />
         <h1 style={styles.title}>IMMORTAIL™</h1>
-        <p style={styles.subtitle}>Core Platform Foundation — Run 1</p>
+        <p style={styles.subtitle}>Core Platform — Run 3: State + Hydration + Recovery</p>
 
-        <div style={styles.divider} />
-        <p style={styles.sectionLabel}>RUNTIME</p>
-        <StatusBadge label="STATUS" value={runtimeState.status} type="success" />
-        <StatusBadge label="VERSION" value={runtimeState.version} type="info" />
-        <StatusBadge label="BUILD" value={runtimeState.build} type="info" />
-        <StatusBadge label="MODE" value={runtimeState.mode} type="default" />
-        <StatusBadge
-          label="INITIALIZED AT"
-          value={runtimeState.initializedAt ? new Date(runtimeState.initializedAt).toISOString() : '—'}
-          type="default"
-        />
-        <StatusBadge
-          label="READY AT"
-          value={runtimeState.readyAt ? new Date(runtimeState.readyAt).toISOString() : '—'}
-          type="default"
-        />
+        {/* CORE RUNTIME */}
+        <Divider />
+        <SectionLabel label="CORE RUNTIME" />
+        <StatusBadge label="STATUS"   value={coreRuntime.status}  type="success" />
+        <StatusBadge label="VERSION"  value={coreRuntime.version} type="info" />
+        <StatusBadge label="BUILD"    value={coreRuntime.build}   type="info" />
+        <StatusBadge label="MODE"     value={coreRuntime.mode}    type="default" />
+        <StatusBadge label="PLATFORM" value={coreRuntime.environment?.platform} type="default" />
 
-        <div style={styles.divider} />
-        <p style={styles.sectionLabel}>SUBSYSTEMS</p>
-        <StatusBadge
-          label="HYDRATION"
-          value={runtimeState.flags?.hydrationReady ? 'READY' : 'PENDING'}
-          type={runtimeState.flags?.hydrationReady ? 'success' : 'warn'}
-        />
-        <StatusBadge
-          label="RECOVERY"
-          value={runtimeState.flags?.recoveryReady ? 'READY' : 'PENDING'}
-          type={runtimeState.flags?.recoveryReady ? 'success' : 'warn'}
-        />
-        <StatusBadge
-          label="SCHEDULER"
-          value={runtimeState.flags?.schedulerReady ? 'READY' : 'PENDING'}
-          type={runtimeState.flags?.schedulerReady ? 'success' : 'warn'}
-        />
+        {/* APP STATE */}
+        <Divider />
+        <SectionLabel label="APP STATE" />
+        <StatusBadge label="INITIALIZED" value={String(appState.initialized)} type={appState.initialized ? 'success' : 'warn'} />
+        <StatusBadge label="HYDRATED"    value={String(appState.hydrated)}    type={appState.hydrated    ? 'success' : 'warn'} />
+        <StatusBadge label="RECOVERED"   value={String(appState.recovered)}   type={appState.recovered   ? 'success' : 'default'} />
+        <StatusBadge label="READY"       value={String(appState.ready)}       type={appState.ready       ? 'success' : 'warn'} />
 
-        <div style={styles.divider} />
-        <p style={styles.sectionLabel}>BOOT</p>
-        <StatusBadge label="FINAL STAGE" value={currentStage} type="success" />
-        <StatusBadge label="PLATFORM" value={runtimeState.environment?.platform || '—'} type="default" />
-        <StatusBadge label="BROWSER" value={runtimeState.environment?.browserType || '—'} type="default" />
-        <StatusBadge
-          label="MOBILE"
-          value={runtimeState.environment?.isMobile ? 'YES' : 'NO'}
-          type="default"
-        />
+        {/* RUNTIME STATE LIFECYCLE */}
+        <Divider />
+        <SectionLabel label="RUNTIME LIFECYCLE" />
+        <StatusBadge label="BOOT COMPLETE"      value={String(runtimeState.bootComplete)}      type={runtimeState.bootComplete      ? 'success' : 'warn'} />
+        <StatusBadge label="HYDRATION COMPLETE" value={String(runtimeState.hydrationComplete)} type={runtimeState.hydrationComplete ? 'success' : 'warn'} />
+        <StatusBadge label="RECOVERY COMPLETE"  value={String(runtimeState.recoveryComplete)}  type={runtimeState.recoveryComplete  ? 'success' : 'default'} />
+        <StatusBadge label="SESSION RESTORED"   value={String(runtimeState.sessionRestored)}   type={runtimeState.sessionRestored   ? 'success' : 'warn'} />
 
-        <div style={styles.divider} />
-        <p style={{ ...styles.sectionLabel, color: '#22c55e' }}>
-          ALL SYSTEMS NOMINAL — RUN 1 COMPLETE
-        </p>
+        {/* SUBSYSTEMS */}
+        <Divider />
+        <SectionLabel label="SUBSYSTEMS" />
+        <StatusBadge label="STORAGE"   value={appState.flags.storageReady   ? 'READY' : 'PENDING'} type={appState.flags.storageReady   ? 'success' : 'warn'} />
+        <StatusBadge label="HYDRATION" value={appState.flags.hydrationReady ? 'READY' : 'PENDING'} type={appState.flags.hydrationReady ? 'success' : 'warn'} />
+        <StatusBadge label="RECOVERY"  value={appState.flags.recoveryReady  ? 'READY' : 'PENDING'} type={appState.flags.recoveryReady  ? 'success' : 'warn'} />
+        <StatusBadge label="SCHEDULER" value={appState.flags.schedulerReady ? 'READY' : 'PENDING'} type={appState.flags.schedulerReady ? 'success' : 'warn'} />
+        <StatusBadge label="SESSION"   value={appState.flags.sessionReady   ? 'READY' : 'PENDING'} type={appState.flags.sessionReady   ? 'success' : 'warn'} />
+
+        {/* HYDRATION */}
+        <Divider />
+        <SectionLabel label="HYDRATION" />
+        <StatusBadge label="STATUS"  value={hydrationState.status}          type={hydrationState.status === 'complete' ? 'success' : 'warn'} />
+        <StatusBadge label="PARTIAL" value={String(hydrationState.partial)} type={hydrationState.partial ? 'warn' : 'success'} />
+
+        {/* SESSION */}
+        <Divider />
+        <SectionLabel label="SESSION" />
+        <StatusBadge label="SESSION ID"  value={sessionState.sessionId || 'none'} type={sessionState.sessionId ? 'info' : 'default'} />
+        <StatusBadge label="STATUS"      value={sessionState.status}               type={sessionState.status === 'active' || sessionState.status === 'restored' ? 'success' : 'warn'} />
+        <StatusBadge label="FIRST RUN"   value={String(sessionState.continuity.isFirstRun)}    type="default" />
+        <StatusBadge label="HAD SESSION" value={String(sessionState.continuity.hadPreviousSession)} type="default" />
+        <StatusBadge label="CHECKPOINTS" value={sessionState.checkpoints.length}  type="default" />
+
+        <Divider />
+        <SectionLabel label="ALL SYSTEMS NOMINAL — RUN 3 COMPLETE" color="#22c55e" />
       </div>
     </div>
   );
 }
 
 // ----------------------------------------------------------------
-// INLINE STYLES
+// STYLES
 // ----------------------------------------------------------------
 
 const styles = {
@@ -183,20 +205,20 @@ const styles = {
     minHeight: '100vh',
     background: '#020617',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    padding: '24px',
+    padding: '32px 16px',
     fontFamily: "'Courier New', Courier, monospace",
   },
   panel: {
     width: '100%',
-    maxWidth: '480px',
+    maxWidth: '500px',
     background: '#0f172a',
     border: '1px solid #1e293b',
     borderRadius: '4px',
     padding: '32px',
   },
-  statusIndicator: {
+  dot: {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
@@ -210,22 +232,9 @@ const styles = {
     letterSpacing: '0.15em',
   },
   subtitle: {
-    fontSize: '11px',
-    color: '#475569',
-    margin: '0 0 0 0',
-    letterSpacing: '0.05em',
-  },
-  divider: {
-    height: '1px',
-    background: '#1e293b',
-    margin: '20px 0 12px 0',
-  },
-  sectionLabel: {
     fontSize: '10px',
-    color: '#334155',
-    letterSpacing: '0.1em',
-    fontWeight: 700,
-    marginBottom: '8px',
-    marginTop: '0',
+    color: '#475569',
+    margin: 0,
+    letterSpacing: '0.05em',
   },
 };
