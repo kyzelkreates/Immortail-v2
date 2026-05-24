@@ -8,12 +8,12 @@
 const PREFIX = 'immortail_';
 
 export const KEYS = {
-  DOG:           PREFIX + 'dog',
-  MEMORIES:      PREFIX + 'memories',
-  SETTINGS:      PREFIX + 'settings',
-  SESSION:       PREFIX + 'session',
-  CONFIG:        PREFIX + 'config',
-  MEDIA:         PREFIX + 'media',
+  DOG:            PREFIX + 'dog',
+  MEMORIES:       PREFIX + 'memories',
+  SETTINGS:       PREFIX + 'settings',
+  SESSION:        PREFIX + 'session',
+  CONFIG:         PREFIX + 'config',
+  MEDIA:          PREFIX + 'media',
   COMPANION_CORE: PREFIX + 'companion_core',   // Run 3: unified entity state
 };
 
@@ -57,26 +57,42 @@ export const DEFAULT_CONFIG = {
 // ── Default companionCore (Run 3 — SSOT unified entity) ───────────
 
 export const DEFAULT_COMPANION_CORE = {
-  identity: {
-    name:     'Immortail Dog',
-    mood:     'neutral',
-    energy:   50,
-    trust:    0,
-    createdAt: null,   // set on first boot
+  // Run 4: identity lock — written once, never overwritten
+  identityLock: {
+    signature:    'IMMORTAIL_DOG_CORE_V1',
+    lockedAt:     null,           // timestamp of first lock
+    immutable:    true,
+    lockedTraits: {
+      personality:   'stable_companion',
+      tone:          'calm_emotional_support',
+      responseStyle: 'consistent_entity_voice',
+    },
   },
-  memory:         [],        // all timeline events (chat + media + emotional)
-  mediaMemory:    [],        // media-specific subset (images, audio, video)
+  identity: {
+    name:      'Immortail Dog',
+    mood:      'neutral',
+    energy:    50,
+    trust:     0,
+    createdAt: null,
+  },
+  // Run 4: rolling window for smoothing (last 5 states)
+  emotionHistory: [],
+  memory:         [],
+  mediaMemory:    [],
   behaviourState: {
-    current:        'idle',
-    previous:       null,
-    updatedAt:      null,
-    waitingSince:   null,    // set when idle > threshold
+    current:      'idle',
+    previous:     null,
+    updatedAt:    null,
+    waitingSince: null,
+    // Run 4: smoothed averages
+    smoothedMood:   'neutral',
+    smoothedEnergy: 50,
   },
   emotionalState: {
-    dominant:   'neutral',
-    valence:    0,           // -100 (negative) → +100 (positive)
-    arousal:    50,          // 0 (calm) → 100 (excited)
-    updatedAt:  null,
+    dominant:  'neutral',
+    valence:   0,
+    arousal:   50,
+    updatedAt: null,
   },
   lastInteraction: null,
 };
@@ -193,29 +209,32 @@ export const storage = {
   saveSession: (data) => write(KEYS.SESSION, data),
 
   // ══════════════════════════════════════════════════════════════════
-  // ── COMPANION CORE (Run 3) ────────────────────────────────────────
+  // ── COMPANION CORE (Run 3 + Run 4 extensions) ─────────────────────
   // Single unified entity. ALL companion state lives here.
-  // Arrays use .slice(-500) cap. No external writes allowed.
   // ══════════════════════════════════════════════════════════════════
 
   /**
    * getCompanionCore()
    * Deep-merges persisted state onto defaults.
-   * Arrays from storage take precedence (not overwritten by defaults).
+   * identityLock is NEVER overwritten — once locked it is read-only.
    */
   getCompanionCore: () => {
     const persisted = read(KEYS.COMPANION_CORE);
     if (!persisted) {
-      // First boot — initialise with timestamp
       const initial = deepMerge(DEFAULT_COMPANION_CORE, {
-        identity: { createdAt: Date.now() },
+        identity:     { createdAt: Date.now() },
+        identityLock: { lockedAt:  Date.now() },
       });
       write(KEYS.COMPANION_CORE, initial);
       return initial;
     }
-    // Merge: preserve persisted arrays, merge scalar defaults
     return {
-      identity:       deepMerge(DEFAULT_COMPANION_CORE.identity, persisted.identity ?? {}),
+      // Run 4: identityLock always merged from default (so it exists)
+      // but lockedAt + lockedTraits are preserved from persisted (never reset)
+      identityLock:   persisted.identityLock
+                        ?? deepMerge(DEFAULT_COMPANION_CORE.identityLock, { lockedAt: Date.now() }),
+      identity:       deepMerge(DEFAULT_COMPANION_CORE.identity,       persisted.identity       ?? {}),
+      emotionHistory: persisted.emotionHistory ?? [],
       memory:         persisted.memory         ?? [],
       mediaMemory:    persisted.mediaMemory     ?? [],
       behaviourState: deepMerge(DEFAULT_COMPANION_CORE.behaviourState, persisted.behaviourState ?? {}),
@@ -226,44 +245,80 @@ export const storage = {
 
   /**
    * saveCompanionCore(core)
-   * Full save. Called only by companionCoreService.
+   * Full save. ENFORCES identityLock immutability before write.
    */
-  saveCompanionCore: (core) => write(KEYS.COMPANION_CORE, core),
+  saveCompanionCore: (core) => {
+    // Run 4 HARD RULE: identityLock.lockedTraits + signature can never be
+    // changed. Re-inject from defaults before every write.
+    const persisted = read(KEYS.COMPANION_CORE);
+    const safeLock  = persisted?.identityLock
+      ?? deepMerge(DEFAULT_COMPANION_CORE.identityLock, { lockedAt: Date.now() });
+
+    const safeCore = {
+      ...core,
+      identityLock: {
+        ...safeLock,
+        // These three fields are permanently immutable
+        signature:    DEFAULT_COMPANION_CORE.identityLock.signature,
+        immutable:    true,
+        lockedTraits: DEFAULT_COMPANION_CORE.identityLock.lockedTraits,
+      },
+    };
+    return write(KEYS.COMPANION_CORE, safeCore);
+  },
 
   /**
    * patchCompanionCore(patch)
-   * Shallow-merges a patch object onto the current core.
-   * For identity/behaviourState/emotionalState patches use patchCoreSection.
+   * Shallow-merges a patch. identityLock is always protected.
    */
   patchCompanionCore: (patch) => {
     const current = storage.getCompanionCore();
     const updated = { ...current, ...patch };
-    return write(KEYS.COMPANION_CORE, updated);
+    return storage.saveCompanionCore(updated);  // routes through lock guard
   },
 
   /**
    * patchCoreSection(section, patch)
-   * Deep-merges a patch into a named section of the core.
-   * section: 'identity' | 'behaviourState' | 'emotionalState'
+   * Deep-merges a patch into a named section.
+   * 'identityLock' section is rejected silently.
    */
   patchCoreSection: (section, patch) => {
+    if (section === 'identityLock') {
+      console.warn('[IMMORTAIL] identityLock is immutable — patch rejected.');
+      return false;
+    }
     const core = storage.getCompanionCore();
     core[section] = deepMerge(core[section] ?? {}, patch);
-    return write(KEYS.COMPANION_CORE, core);
+    return storage.saveCompanionCore(core);   // routes through lock guard
   },
 
   /**
    * addCoreMemory(event)
-   * Appends to companionCore.memory timeline. Max 500 entries.
-   * If event is media-type, also pushes to mediaMemory. Max 100.
+   * Validates event before appending to companionCore.memory.
+   * Invalid events are rejected without crashing.
+   * Also pushes to mediaMemory for media types.
    */
   addCoreMemory: (event) => {
+    // ── Run 4: Memory Integrity Validation ─────────────────────
+    const validation = storage.memoryIntegrityCheck(event);
+    if (!validation.valid) {
+      console.warn('[IMMORTAIL] Memory rejected:', validation.reason, event);
+      return false;
+    }
+
     const core = storage.getCompanionCore();
+
     const entry = {
       ...event,
-      id:  genId(),
+      id:  event.id ?? genId(),
       ts:  event.ts ?? Date.now(),
     };
+
+    // Duplicate ID guard
+    if (core.memory.some(m => m.id === entry.id)) {
+      console.warn('[IMMORTAIL] Memory rejected: duplicate id', entry.id);
+      return false;
+    }
 
     core.memory = [...core.memory, entry].slice(-500);
 
@@ -271,13 +326,43 @@ export const storage = {
       core.mediaMemory = [...core.mediaMemory, entry].slice(-100);
     }
 
-    // Update lastInteraction
     core.lastInteraction = entry.ts;
 
-    return write(KEYS.COMPANION_CORE, core);
+    return storage.saveCompanionCore(core);
   },
 
-  // ── Full reset ───────────────────────────────────────────────────
+  /**
+   * memoryIntegrityCheck(event)
+   * Run 4: Validates a memory event before it is stored.
+   * Returns { valid: boolean, reason?: string }
+   */
+  memoryIntegrityCheck: (event) => {
+    if (!event || typeof event !== 'object') {
+      return { valid: false, reason: 'event is null or not an object' };
+    }
+    if (!event.ts || typeof event.ts !== 'number') {
+      return { valid: false, reason: 'missing or invalid timestamp' };
+    }
+    if (!event.type || typeof event.type !== 'string') {
+      return { valid: false, reason: 'missing or invalid event type' };
+    }
+    const VALID_TYPES = [
+      'chat','pet','play','talk','rest',
+      'image','audio','video',
+      'emotion','milestone','system','interaction',
+    ];
+    if (!VALID_TYPES.includes(event.type)) {
+      return { valid: false, reason: `unknown event type: "${event.type}"` };
+    }
+    // companionCore exists check
+    const core = read(KEYS.COMPANION_CORE);
+    if (!core) {
+      return { valid: false, reason: 'companionCore not initialised' };
+    }
+    return { valid: true };
+  },
+
+  // ── Full reset (preserves identityLock.lockedAt from first boot) ─
   clear: () => {
     Object.values(KEYS).forEach(k => remove(k));
   },

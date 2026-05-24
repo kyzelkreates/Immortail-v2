@@ -1,12 +1,16 @@
 // ================================================================
-// IMMORTAIL™ — BOOT SEQUENCE (Run 3 extension)
-// 13-step deterministic boot. Emits SYSTEM::APP_READY on success.
+// IMMORTAIL™ — BOOT SEQUENCE (Run 4 extension)
+// 15-step deterministic boot. Emits SYSTEM::APP_READY on success.
 // ================================================================
 
 import storage, { DEFAULT_CONFIG } from './storage.js';
 import { EventBus, EVENTS }        from './eventBus.js';
 import { hydrateDog, applyIdleDecay as legacyDecay } from './dogService.js';
-import { initCompanionCore, applyIdleDecay } from './companionCoreService.js';
+import {
+  initCompanionCore,
+  applyIdleDecay,
+  crossSessionConsistencyCheck,
+} from './companionCoreService.js';
 
 export async function initializeApp() {
   const t0    = Date.now();
@@ -56,50 +60,76 @@ export async function initializeApp() {
     });
     log(5, true, 'hydration check logged');
 
-    // ── Step 6: Load legacy dog state (Run 1–2 compat) ──────────
+    // ── Step 6: Cross-session consistency check (Run 4) ─────────
+    const consistency = crossSessionConsistencyCheck();
+    log(6, consistency.ok,
+      consistency.ok
+        ? 'consistency check passed'
+        : `repaired: [${consistency.repairs.join(' | ')}]`
+    );
+
+    // ── Step 7: Load legacy dog state (Run 1–2 compat) ──────────
     const dog      = storage.getDog();
     const memories = storage.getMemories();
-    log(6, true, `legacy dog=${!!dog} memories=${memories.length}`);
+    log(7, true, `legacy dog=${!!dog} memories=${memories.length}`);
 
-    // ── Step 7: Initialize EventBus ─────────────────────────────
+    // ── Step 8: Initialize EventBus ─────────────────────────────
     EventBus.clear();
-    log(7, true, 'EventBus ready');
+    log(8, true, 'EventBus ready');
 
-    // ── Step 8: Hydrate legacy dog (Run 1–2 hooks still active) ─
+    // ── Step 9: Hydrate legacy dog (Run 1–2 hooks still active) ─
     const hydratedDog = hydrateDog();
-    log(8, true,
+    log(9, true,
       `name=${hydratedDog.name} emotion=${hydratedDog.emotion} bonding=${hydratedDog.bonding}`
     );
 
-    // ── Step 9: Initialize Companion Core (Run 3) ────────────────
+    // ── Step 10: Initialize Companion Core (Run 3+4) ─────────────
     const core = initCompanionCore();
-    log(9, true,
+    log(10, true,
       `core.identity.name=${core.identity.name} ` +
       `mood=${core.identity.mood} ` +
       `memory.length=${core.memory.length} ` +
       `mediaMemory.length=${core.mediaMemory.length}`
     );
 
-    // ── Step 10: Validate companionCore SSOT ────────────────────
+    // ── Step 11: Validate companionCore SSOT (Run 4 additions) ──
+    const lockOk =
+      core.identityLock?.signature === 'IMMORTAIL_DOG_CORE_V1' &&
+      core.identityLock?.immutable  === true &&
+      !!core.identityLock?.lockedTraits?.personality &&
+      !!core.identityLock?.lockedTraits?.tone &&
+      !!core.identityLock?.lockedTraits?.responseStyle;
+
     const coreOk =
       !!core.identity?.name &&
-      typeof core.identity?.trust === 'number' &&
+      typeof core.identity?.trust   === 'number' &&
       Array.isArray(core.memory) &&
       Array.isArray(core.mediaMemory) &&
+      Array.isArray(core.emotionHistory) &&
       !!core.behaviourState &&
-      !!core.emotionalState;
-    log(10, coreOk, coreOk ? 'companionCore valid' : 'companionCore missing keys');
-    if (!coreOk) throw new Error('Companion Core failed validation.');
+      !!core.emotionalState &&
+      lockOk;
 
-    // ── Step 11: Initialize media registry ──────────────────────
+    log(11, coreOk,
+      coreOk
+        ? `companionCore valid (identityLock=${core.identityLock.signature})`
+        : `companionCore FAILED — lockOk=${lockOk}`
+    );
+    if (!coreOk) throw new Error('Companion Core failed Run 4 validation.');
+
+    // ── Step 12: Log identity lock state ─────────────────────────
+    console.log('IMMORTAIL IDENTITY LOCK:', JSON.stringify(core.identityLock, null, 2));
+    log(12, true, 'identityLock logged');
+
+    // ── Step 13: Initialize media registry ──────────────────────
     const mediaItems = storage.getMedia();
-    log(11, true, `standalone media entries=${mediaItems.length}`);
+    log(13, true, `standalone media entries=${mediaItems.length}`);
 
-    // ── Step 12: Start idle decay (Run 3 unified + Run 2 legacy) ─
+    // ── Step 14: Start idle decay ─────────────────────────────────
     setInterval(() => { applyIdleDecay(); legacyDecay(); }, 5 * 60 * 1000);
-    log(12, true, 'idle decay active (5min interval)');
+    log(14, true, 'idle decay active (5min interval)');
 
-    // ── Step 13: Emit SYSTEM::APP_READY ─────────────────────────
+    // ── Step 15: Emit SYSTEM::APP_READY ──────────────────────────
     const duration   = Date.now() - t0;
     const bootResult = {
       ok: true,
@@ -108,9 +138,10 @@ export async function initializeApp() {
       dog:    hydratedDog,
       core,
       config,
+      consistency,
     };
     EventBus.emit(EVENTS.APP_READY, bootResult);
-    log(13, true, `SYSTEM::APP_READY emitted (${duration}ms)`);
+    log(15, true, `SYSTEM::APP_READY emitted (${duration}ms)`);
 
     return bootResult;
 

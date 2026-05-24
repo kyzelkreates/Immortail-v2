@@ -1,7 +1,14 @@
 // ================================================================
-// IMMORTAIL™ — COMPANION CORE SERVICE (Run 3)
+// IMMORTAIL™ — COMPANION CORE SERVICE (Run 3 + Run 4)
 // Unified orchestrator for identity, memory, media, behaviour,
 // emotional state, and Ollama AI reasoning.
+//
+// Run 4 additions (marked ── R4):
+//   • Emotional normalization layer (per-interaction delta caps)
+//   • Identity lock enforcement + Ollama personality anchoring
+//   • Memory integrity validation (delegated to storage)
+//   • Behaviour smoothing engine (5-state rolling average)
+//   • Cross-session consistency check at boot
 //
 // RULES:
 // - All state mutations go through storage.getCompanionCore() +
@@ -28,19 +35,6 @@ export const MOOD = {
   WAITING:  'waiting',
 };
 
-// Mood → valence/arousal deltas
-const MOOD_SIGNATURE = {
-  [MOOD.NEUTRAL]:  { valence:  0, arousal:  0 },
-  [MOOD.HAPPY]:    { valence: 25, arousal: 15 },
-  [MOOD.CURIOUS]:  { valence: 10, arousal: 20 },
-  [MOOD.PLAYFUL]:  { valence: 30, arousal: 30 },
-  [MOOD.CALM]:     { valence: 10, arousal:-20 },
-  [MOOD.ANXIOUS]:  { valence:-15, arousal: 25 },
-  [MOOD.TIRED]:    { valence: -5, arousal:-30 },
-  [MOOD.EXCITED]:  { valence: 35, arousal: 40 },
-  [MOOD.WAITING]:  { valence: -5, arousal:-15 },
-};
-
 // ── Behaviour states ──────────────────────────────────────────────
 
 export const BEHAVIOUR = {
@@ -53,6 +47,16 @@ export const BEHAVIOUR = {
 };
 
 const IDLE_WAITING_THRESHOLD_MS = 30 * 60 * 1000;  // 30 min
+
+// ── Run 4: Per-interaction delta caps (normalization layer) ────────
+// These are MAXIMUM changes allowed per single interaction.
+// Raw deltas from callers are clamped to these bounds.
+const DELTA_CAPS = {
+  valence:  5,   // max ±5 valence per interaction
+  arousal:  8,   // max ±8 arousal per interaction
+  energy:   7,   // max ±7 energy per interaction
+  trust:    3,   // max ±3 trust per interaction
+};
 
 // ── Sentiment classifier (deterministic, no external calls) ───────
 
@@ -85,6 +89,16 @@ function clamp(v, min = -100, max = 100) {
 
 function clamp100(v) { return clamp(v, 0, 100); }
 
+// ── Run 4: Apply delta caps before any emotional mutation ─────────
+function normaliseDelta(raw) {
+  return {
+    valence: clamp(raw.valence ?? 0, -DELTA_CAPS.valence,  DELTA_CAPS.valence),
+    arousal: clamp(raw.arousal ?? 0, -DELTA_CAPS.arousal,  DELTA_CAPS.arousal),
+    energy:  clamp(raw.energy  ?? 0, -DELTA_CAPS.energy,   DELTA_CAPS.energy),
+    trust:   clamp(raw.trust   ?? 0, -DELTA_CAPS.trust,    DELTA_CAPS.trust),
+  };
+}
+
 function deriveMoodFromEmotionalState(es) {
   const { valence, arousal } = es;
   if (valence >  20 && arousal >  20) return MOOD.EXCITED;
@@ -111,17 +125,53 @@ function deriveBehaviourFromMood(mood) {
   return map[mood] || BEHAVIOUR.IDLE;
 }
 
+// ── Run 4: Behaviour smoothing engine ─────────────────────────────
+// Keeps a rolling window of the last 5 mood states.
+// smoothedMood = mode of last 5.  smoothedEnergy = mean of last 5.
+const SMOOTH_WINDOW = 5;
+
+function computeSmoothing(emotionHistory, currentMood, currentEnergy) {
+  const window = [...emotionHistory, { mood: currentMood, energy: currentEnergy }]
+    .slice(-SMOOTH_WINDOW);
+
+  // Mode mood
+  const freq = {};
+  for (const e of window) freq[e.mood] = (freq[e.mood] || 0) + 1;
+  const smoothedMood = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+
+  // Mean energy
+  const smoothedEnergy = Math.round(
+    window.reduce((s, e) => s + (e.energy ?? 50), 0) / window.length
+  );
+
+  return { window, smoothedMood, smoothedEnergy };
+}
+
 // ── Core commit helper ────────────────────────────────────────────
+// Run 4: applies normaliseDelta BEFORE mutating state.
 
-function commitEmotionalShift(delta) {
-  const core = storage.getCompanionCore();
-  const es   = core.emotionalState;
+function commitEmotionalShift(rawDelta) {
+  const core  = storage.getCompanionCore();
+  const es    = core.emotionalState;
 
-  const newValence = clamp(es.valence + (delta.valence || 0));
-  const newArousal = clamp100(es.arousal + (delta.arousal || 0));
-  const newMood    = deriveMoodFromEmotionalState({ valence: newValence, arousal: newArousal });
+  // ── R4: cap each dimension before applying ─────────────────────
+  const delta = normaliseDelta(rawDelta);
+
+  const newValence   = clamp(es.valence + delta.valence);
+  const newArousal   = clamp100(es.arousal + delta.arousal);
+  const newMood      = deriveMoodFromEmotionalState({ valence: newValence, arousal: newArousal });
   const newBehaviour = deriveBehaviourFromMood(newMood);
-  const now = Date.now();
+  const newEnergy    = clamp100(core.identity.energy + delta.energy);
+  const newTrust     = clamp100(core.identity.trust  + delta.trust);
+  const now          = Date.now();
+
+  // ── R4: update rolling emotion history (SMOOTH_WINDOW = 5) ────
+  const updatedHistory = [...(core.emotionHistory ?? []),
+    { mood: newMood, energy: newEnergy, ts: now }
+  ].slice(-SMOOTH_WINDOW);
+
+  const { smoothedMood, smoothedEnergy } =
+    computeSmoothing(updatedHistory, newMood, newEnergy);
 
   core.emotionalState = {
     dominant:  newMood,
@@ -131,18 +181,25 @@ function commitEmotionalShift(delta) {
   };
 
   core.identity.mood   = newMood;
-  core.identity.energy = clamp100(core.identity.energy + (delta.energy || 0));
-  core.identity.trust  = clamp100(core.identity.trust  + (delta.trust  || 0));
+  core.identity.energy = newEnergy;
+  core.identity.trust  = newTrust;
+
+  core.emotionHistory  = updatedHistory;
 
   core.behaviourState = {
-    current:      newBehaviour,
-    previous:     core.behaviourState.current,
-    updatedAt:    now,
-    waitingSince: newMood === MOOD.WAITING ? (core.behaviourState.waitingSince || now) : null,
+    current:        newBehaviour,
+    previous:       core.behaviourState.current,
+    updatedAt:      now,
+    waitingSince:   newMood === MOOD.WAITING
+                      ? (core.behaviourState.waitingSince || now)
+                      : null,
+    // ── R4: smoothed values persisted alongside raw ────────────
+    smoothedMood,
+    smoothedEnergy,
   };
 
   storage.saveCompanionCore(core);
-  EventBus.emit(EVENTS.EMOTION_CHANGED, { ...core.emotionalState });
+  EventBus.emit(EVENTS.EMOTION_CHANGED, { ...core.emotionalState, smoothedMood, smoothedEnergy });
   EventBus.emit(EVENTS.DOG_UPDATED,     { ...core.identity, behaviourState: core.behaviourState });
 
   return core;
@@ -154,19 +211,25 @@ function commitEmotionalShift(delta) {
 
 /**
  * initCompanionCore()
- * Called once at boot. Ensures core exists and repairs idle state.
+ * Called once at boot.
+ * Run 4: runs cross-session consistency check before returning.
  */
 export function initCompanionCore() {
-  const core = storage.getCompanionCore(); // creates if missing
+  // ── R4: Cross-session consistency check ───────────────────────
+  const check = crossSessionConsistencyCheck();
+  if (!check.ok) {
+    console.warn('[IMMORTAIL] Boot consistency issues repaired:', check.repairs);
+  }
 
-  // Check for waiting state due to elapsed idle time
+  const core = storage.getCompanionCore();
   const now  = Date.now();
-  const last  = core.lastInteraction || core.identity.createdAt || now;
-  const idle  = now - last;
+  const last = core.lastInteraction || core.identity.createdAt || now;
+  const idle = now - last;
 
   if (idle > IDLE_WAITING_THRESHOLD_MS &&
       core.behaviourState.current !== BEHAVIOUR.WAITING) {
     core.behaviourState = {
+      ...core.behaviourState,
       current:      BEHAVIOUR.WAITING,
       previous:     core.behaviourState.current,
       updatedAt:    now,
@@ -177,7 +240,87 @@ export function initCompanionCore() {
   }
 
   EventBus.emit(EVENTS.DOG_UPDATED, { ...core.identity, behaviourState: core.behaviourState });
-  return core;
+  return storage.getCompanionCore();
+}
+
+/**
+ * crossSessionConsistencyCheck()
+ * Run 4: validates companionCore integrity on boot.
+ * Repairs what it can; never reinitialises randomly.
+ * Returns { ok, repairs[] }
+ */
+export function crossSessionConsistencyCheck() {
+  const repairs = [];
+
+  // ── Read RAW persisted payload before deepMerge healing ────────
+  // getCompanionCore() auto-heals via deepMerge, so corruption is
+  // invisible to it. We must inspect the raw localStorage value to
+  // detect null/corrupt sections, then repair and report them.
+  let rawPersisted = null;
+  try {
+    const raw = localStorage.getItem('immortail_companion_core');
+    rawPersisted = raw ? (JSON.parse(raw)?.d ?? null) : null;
+  } catch { rawPersisted = null; }
+
+  // If nothing persisted yet — getCompanionCore() creates defaults
+  if (!rawPersisted) {
+    storage.getCompanionCore();  // triggers first-boot creation
+    return { ok: true, repairs: ['first-boot: defaults created'] };
+  }
+
+  // 1. identityLock must exist and have correct signature
+  if (!rawPersisted.identityLock) {
+    repairs.push('identityLock: missing — will be injected on next save');
+  }
+  if (rawPersisted.identityLock?.signature !== 'IMMORTAIL_DOG_CORE_V1') {
+    repairs.push('identityLock.signature: corrected to IMMORTAIL_DOG_CORE_V1');
+    // saveCompanionCore always enforces the correct signature
+    const core = storage.getCompanionCore();
+    storage.saveCompanionCore(core);
+  }
+
+  // 2. memory must be an array
+  if (!Array.isArray(rawPersisted.memory)) {
+    storage.patchCoreSection('memory', []);
+    repairs.push('memory: reset to []');
+  }
+
+  // 3. emotionalState — detect null/corrupt in raw payload
+  if (!rawPersisted.emotionalState ||
+      typeof rawPersisted.emotionalState.valence !== 'number') {
+    // deepMerge already healed it — but we must write the healed value back
+    // so it is durable across the NEXT raw read as well
+    const healed = {
+      dominant:  MOOD.NEUTRAL,
+      valence:   0,
+      arousal:   50,
+      updatedAt: Date.now(),
+    };
+    storage.patchCoreSection('emotionalState', healed);
+    repairs.push('emotionalState: restored to neutral defaults');
+  }
+
+  // 4. behaviourState — detect null/corrupt in raw payload
+  if (!rawPersisted.behaviourState || !rawPersisted.behaviourState.current) {
+    const healed = {
+      current:        BEHAVIOUR.IDLE,
+      previous:       null,
+      updatedAt:      Date.now(),
+      waitingSince:   null,
+      smoothedMood:   MOOD.NEUTRAL,
+      smoothedEnergy: 50,
+    };
+    storage.patchCoreSection('behaviourState', healed);
+    repairs.push('behaviourState: restored to idle defaults');
+  }
+
+  // 5. emotionHistory must be an array
+  if (!Array.isArray(rawPersisted.emotionHistory)) {
+    storage.patchCoreSection('emotionHistory', []);
+    repairs.push('emotionHistory: reset to []');
+  }
+
+  return { ok: repairs.length === 0, repairs };
 }
 
 /**
@@ -190,11 +333,7 @@ export function getCore() {
 
 /**
  * recordChatMessage(text)
- * Handles a user chat message:
- * 1. Classifies sentiment
- * 2. Shifts emotional state
- * 3. Adds memory event
- * 4. Updates behaviourState
+ * Run 4: delta is capped by normaliseDelta inside commitEmotionalShift.
  */
 export function recordChatMessage(text) {
   if (!text || typeof text !== 'string') return getCore();
@@ -202,32 +341,32 @@ export function recordChatMessage(text) {
   const sentiment = classifyMessage(text);
   const now       = Date.now();
 
-  const delta = {
+  // Raw deltas — will be capped by normaliseDelta (Run 4)
+  const rawDelta = {
     positive: { valence: 15, arousal: 10, energy:  5, trust: 2 },
     negative: { valence:-12, arousal: 15, energy: -3, trust:-1 },
     neutral:  { valence:  2, arousal:  5, energy:  2, trust: 1 },
   }[sentiment];
 
-  const core = commitEmotionalShift(delta);
+  const core = commitEmotionalShift(rawDelta);
 
-  // Memory event
   storage.addCoreMemory({
-    type:       'chat',
-    category:   'interaction',
+    type:      'chat',
+    category:  'interaction',
     sentiment,
-    text:       text.slice(0, 200),
-    mood:       core.identity.mood,
-    behaviour:  core.behaviourState.current,
-    label:      `💬 ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
-    ts:         now,
+    text:      text.slice(0, 200),
+    mood:      core.identity.mood,
+    behaviour: core.behaviourState.current,
+    label:     `💬 ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
+    ts:        now,
   });
 
-  // Mirror to legacy memory system (Run 1–2 compat)
+  // Legacy compat
   storage.addMemory({
-    type:   'talk',
+    type:    'talk',
     emotion: core.identity.mood,
-    label:  `💬 Chat — ${sentiment}`,
-    ts:     now,
+    label:   `💬 Chat — ${sentiment}`,
+    ts:      now,
   });
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type: 'chat', sentiment, ts: now });
@@ -236,18 +375,16 @@ export function recordChatMessage(text) {
 
 /**
  * recordMediaEvent(mediaEntry)
- * Called when ANY media input lands (image, audio, video).
- * Fuses media into the unified memory timeline.
+ * Media input fused into unified memory.
  */
 export function recordMediaEvent(mediaEntry) {
   if (!mediaEntry) return getCore();
 
   const now  = Date.now();
-  // Media always raises curiosity + energy
   const core = commitEmotionalShift({ valence: 10, arousal: 20, energy: 10, trust: 1 });
 
   storage.addCoreMemory({
-    type:      mediaEntry.type,      // 'image' | 'audio' | 'video'
+    type:      mediaEntry.type,
     category:  'media',
     source:    mediaEntry.source,
     label:     mediaEntry.label || `${mediaEntry.type} captured`,
@@ -257,12 +394,11 @@ export function recordMediaEvent(mediaEntry) {
     ts:        now,
   });
 
-  // Mirror to legacy memory
   storage.addMemory({
-    type:   mediaEntry.type,
+    type:    mediaEntry.type,
     emotion: core.identity.mood,
-    label:  `📷 ${mediaEntry.label || mediaEntry.type} stored`,
-    ts:     now,
+    label:   `📷 ${mediaEntry.label || mediaEntry.type} stored`,
+    ts:      now,
   });
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type: mediaEntry.type, ts: now });
@@ -271,29 +407,27 @@ export function recordMediaEvent(mediaEntry) {
 
 /**
  * recordInteractionEvent(type)
- * Wraps physical companion interactions (pet, play, talk, rest).
- * Bridges Run 1–2 dogService interactions into the unified core.
+ * Physical companion interactions (pet, play, talk, rest).
  */
 export function recordInteractionEvent(type) {
-  const now = Date.now();
-  const deltas = {
-    pet:  { valence: 20, arousal: 10, energy: 5, trust: 3 },
+  const now      = Date.now();
+  const rawDeltas = {
+    pet:  { valence: 20, arousal: 10, energy: 5,  trust: 3 },
     play: { valence: 25, arousal: 25, energy: 10, trust: 2 },
-    talk: { valence: 10, arousal: 15, energy: 3, trust: 2 },
+    talk: { valence: 10, arousal: 15, energy: 3,  trust: 2 },
     rest: { valence:  5, arousal:-20, energy: 15, trust: 1 },
   };
-  const delta = deltas[type] || { valence: 5, arousal: 5, energy: 2, trust: 1 };
-  const core  = commitEmotionalShift(delta);
-
-  const icons = { pet: '🐾', play: '🎾', talk: '💬', rest: '💤' };
+  const rawDelta = rawDeltas[type] || { valence: 5, arousal: 5, energy: 2, trust: 1 };
+  const core     = commitEmotionalShift(rawDelta);
+  const icons    = { pet: '🐾', play: '🎾', talk: '💬', rest: '💤' };
 
   storage.addCoreMemory({
-    type:       type,
-    category:   'interaction',
-    label:      `${icons[type] || '•'} ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-    mood:       core.identity.mood,
-    behaviour:  core.behaviourState.current,
-    ts:         now,
+    type:      type,
+    category:  'interaction',
+    label:     `${icons[type] || '•'} ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+    mood:      core.identity.mood,
+    behaviour: core.behaviourState.current,
+    ts:        now,
   });
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type, ts: now });
@@ -302,22 +436,21 @@ export function recordInteractionEvent(type) {
 
 /**
  * applyIdleDecay()
- * Called every 5 min from boot. Applies time-based state drift.
+ * Called every 5 min from boot. Time-based state drift.
  */
 export function applyIdleDecay() {
-  const core = storage.getCompanionCore();
-  const now  = Date.now();
-  const last  = core.lastInteraction || core.identity.createdAt || now;
-  const idleMs = now - last;
-  const idleMins = idleMs / 60000;
+  const core    = storage.getCompanionCore();
+  const now     = Date.now();
+  const last    = core.lastInteraction || core.identity.createdAt || now;
+  const idleMins = (now - last) / 60000;
 
   if (idleMins > 60 && core.behaviourState.current !== BEHAVIOUR.WAITING) {
     commitEmotionalShift({ valence: -5, arousal: -20, energy: -5, trust: 0 });
     storage.patchCoreSection('behaviourState', {
-      current:     BEHAVIOUR.WAITING,
-      previous:    core.behaviourState.current,
+      current:      BEHAVIOUR.WAITING,
+      previous:     core.behaviourState.current,
       waitingSince: now,
-      updatedAt:   now,
+      updatedAt:    now,
     });
     storage.patchCoreSection('identity', { mood: MOOD.WAITING });
   } else if (idleMins > 15 && core.emotionalState.valence > 20) {
@@ -327,7 +460,6 @@ export function applyIdleDecay() {
 
 /**
  * renameCompanion(name)
- * Updates identity.name across the companionCore.
  */
 export function renameCompanion(name) {
   const clean = String(name).trim().slice(0, 24);
@@ -340,11 +472,10 @@ export function renameCompanion(name) {
 
 /**
  * resetCompanionCore()
- * Full wipe — resets to default. Called from Settings.
+ * Full wipe. identityLock is always re-applied by saveCompanionCore.
  */
 export function resetCompanionCore() {
   const fresh = {
-    ...storage.getCompanionCore(),
     identity: {
       name:      'Immortail Dog',
       mood:      MOOD.NEUTRAL,
@@ -352,13 +483,16 @@ export function resetCompanionCore() {
       trust:     0,
       createdAt: Date.now(),
     },
+    emotionHistory: [],
     memory:         [],
     mediaMemory:    [],
     behaviourState: {
-      current:     BEHAVIOUR.IDLE,
-      previous:    null,
-      updatedAt:   Date.now(),
-      waitingSince: null,
+      current:        BEHAVIOUR.IDLE,
+      previous:       null,
+      updatedAt:      Date.now(),
+      waitingSince:   null,
+      smoothedMood:   MOOD.NEUTRAL,
+      smoothedEnergy: 50,
     },
     emotionalState: {
       dominant:  MOOD.NEUTRAL,
@@ -368,19 +502,26 @@ export function resetCompanionCore() {
     },
     lastInteraction: null,
   };
+  // saveCompanionCore will re-inject identityLock automatically
   storage.saveCompanionCore(fresh);
   EventBus.emit(EVENTS.DOG_UPDATED, { ...fresh.identity });
-  return fresh;
+  return storage.getCompanionCore();
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ── OLLAMA INTEGRATION (Run 3 + Run 4 identity anchoring)
+// ══════════════════════════════════════════════════════════════════
 
 /**
  * buildOllamaPrompt(userMessage)
- * Constructs a context-injected prompt for the Ollama AI layer.
- * companionCore state is always injected — no UI-only responses.
+ * Run 4: injects identityLock.lockedTraits into every prompt.
+ * companionCore state always included — no UI-only responses.
  */
 export function buildOllamaPrompt(userMessage) {
-  const core = storage.getCompanionCore();
+  const core         = storage.getCompanionCore();
   const recentMemory = core.memory.slice(-10);
+  const lock         = core.identityLock;
+  const traits       = lock?.lockedTraits ?? {};
 
   const memoryContext = recentMemory.length
     ? recentMemory.map(m =>
@@ -388,31 +529,44 @@ export function buildOllamaPrompt(userMessage) {
       ).join('\n')
     : 'No memories yet.';
 
+  const systemPrompt = [
+    // ── R4: Identity Lock header — injected first, always ──────
+    `=== COMPANION IDENTITY LOCK [${lock?.signature ?? 'IMMORTAIL_DOG_CORE_V1'}] ===`,
+    `You are ${core.identity.name}.`,
+    `Personality: ${traits.personality ?? 'stable_companion'}.`,
+    `Tone: ${traits.tone ?? 'calm_emotional_support'}.`,
+    `Response style: ${traits.responseStyle ?? 'consistent_entity_voice'}.`,
+    `You do NOT reset personality between responses.`,
+    `You maintain stable emotional behaviour across all sessions.`,
+    `You reflect long-term memory state — not just the current message.`,
+    `=== END IDENTITY LOCK ===`,
+    ``,
+    // ── Live state ─────────────────────────────────────────────
+    `Current mood: ${core.identity.mood}.`,
+    `Smoothed mood: ${core.behaviourState.smoothedMood ?? core.identity.mood}.`,
+    `Energy: ${core.identity.energy}/100. Trust: ${core.identity.trust}/100.`,
+    `Behaviour: ${core.behaviourState.current}.`,
+    `Emotional state — valence: ${core.emotionalState.valence}, arousal: ${core.emotionalState.arousal}.`,
+    ``,
+    `Recent memory context:`,
+    memoryContext,
+    ``,
+    `Respond as this companion entity — emotionally consistent with the above state.`,
+    `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
+  ].join('\n');
+
   return {
-    system: [
-      `You are ${core.identity.name}, a persistent AI companion dog.`,
-      `Current mood: ${core.identity.mood}.`,
-      `Energy: ${core.identity.energy}/100. Trust: ${core.identity.trust}/100.`,
-      `Behaviour: ${core.behaviourState.current}.`,
-      `Emotional state — valence: ${core.emotionalState.valence}, arousal: ${core.emotionalState.arousal}.`,
-      ``,
-      `Recent memory context:`,
-      memoryContext,
-      ``,
-      `Respond as this companion entity — emotionally consistent with the above state.`,
-      `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
-    ].join('\n'),
-    user: userMessage,
-    model: storage.getConfig()?.providers?.ollama?.model || 'llama3',
+    system:  systemPrompt,
+    user:    userMessage,
+    model:   storage.getConfig()?.providers?.ollama?.model   || 'llama3',
     baseUrl: storage.getConfig()?.providers?.ollama?.baseUrl || 'http://localhost:11434',
   };
 }
 
 /**
  * sendToOllama(userMessage)
- * Sends a context-injected prompt to the local Ollama instance.
+ * Sends context-injected prompt to local Ollama.
  * Returns { ok, text, error }.
- * Falls back gracefully if Ollama is unavailable.
  */
 export async function sendToOllama(userMessage) {
   const { system, user, model, baseUrl } = buildOllamaPrompt(userMessage);
@@ -424,8 +578,8 @@ export async function sendToOllama(userMessage) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system',    content: system },
-          { role: 'user',      content: user   },
+          { role: 'system', content: system },
+          { role: 'user',   content: user   },
         ],
         stream: false,
       }),
@@ -439,10 +593,27 @@ export async function sendToOllama(userMessage) {
 
     return { ok: true, text };
   } catch (err) {
-    return {
-      ok:    false,
-      text:  null,
-      error: err.message,
-    };
+    return { ok: false, text: null, error: err.message };
   }
 }
+
+// ── Run 4: exported helper for tests / UI diagnostics ─────────────
+
+/**
+ * getSmoothedState()
+ * Returns the current rolling-average behaviour state.
+ */
+export function getSmoothedState() {
+  const core = storage.getCompanionCore();
+  return {
+    smoothedMood:   core.behaviourState.smoothedMood   ?? core.identity.mood,
+    smoothedEnergy: core.behaviourState.smoothedEnergy ?? core.identity.energy,
+    window:         core.emotionHistory ?? [],
+  };
+}
+
+/**
+ * DELTA_CAPS
+ * Exported so the verification gate and UI diagnostics can assert against it.
+ */
+export { DELTA_CAPS };
