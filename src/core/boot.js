@@ -1,6 +1,6 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 5)
-// Deterministic 22-step boot pipeline.
+// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 6)
+// Deterministic 24-step boot pipeline.
 //
 // BOOT ORDER:
 //  1.  validate environment
@@ -21,17 +21,19 @@
 //  16. initialize lifecycle controller
 //  17. initialize supervisor agent
 //  18. register specialized agents
-//  19. initialize scheduler
-//  20. emit runtime initialized
-//  21. mount application
-//  22. emit APP_READY
+//  19. initialize companion engines
+//  20. synchronize companion runtime
+//  21. initialize scheduler
+//  22. emit runtime initialized
+//  23. mount application
+//  24. emit APP_READY
 // ================================================================
 
 import { BOOT_STAGES, RUNTIME_EVENTS } from '../utils/constants.js';
 import { BootLogger } from '../utils/logger.js';
 
 // Core — Run 1
-import { validateEnvironment, validateRuntimeContracts }        from './validation.js';
+import { validateEnvironment, validateRuntimeContracts }         from './validation.js';
 import {
   initializeRuntime,
   getRuntimeState    as getCoreRuntimeState,
@@ -39,70 +41,70 @@ import {
   setRuntimeError,
   markRuntimeReady,
   registerModule,
-}                                                                from './runtime.js';
-import { initializeHydration, hydrateRuntime }                  from './hydration.js';
-import { initializeRecovery }                                    from './recovery.js';
-import { initializeScheduler }                                   from './scheduler.js';
+}                                                                 from './runtime.js';
+import { initializeHydration, hydrateRuntime }                   from './hydration.js';
+import { initializeRecovery }                                     from './recovery.js';
+import { initializeScheduler }                                    from './scheduler.js';
 
 // Storage — Run 2
 import { initializeStorage, getStorage, validateMigrationState } from '../storage/storage.js';
-import { getMigrationVersion }                                   from '../storage/migrations.js';
-import { getAllSchemas, getAllStoreNames }                        from '../storage/schemas.js';
+import { getMigrationVersion }                                    from '../storage/migrations.js';
+import { getAllSchemas, getAllStoreNames }                         from '../storage/schemas.js';
 
 // State — Run 3
-import { updateAppState, registerActiveModule }                  from '../state/appState.js';
-import { updateRuntimeState, markBootComplete }                  from '../state/runtimeState.js';
-import { getSessionState, createSession }                        from '../state/sessionState.js';
+import { updateAppState, registerActiveModule }                   from '../state/appState.js';
+import { updateRuntimeState, markBootComplete }                   from '../state/runtimeState.js';
+import { getSessionState, createSession }                         from '../state/sessionState.js';
 
 // Events — Run 4
-import { initializeEventBus }                                    from '../events/eventBus.js';
-import { registerAllContracts }                                  from '../events/eventRegistry.js';
+import { initializeEventBus }                                     from '../events/eventBus.js';
+import { registerAllContracts }                                   from '../events/eventRegistry.js';
 
 // Services — Run 4
-import { initializeDogRuntime }                                  from '../services/dogService.js';
-import { initializeAIRuntime }                                   from '../services/aiService.js';
-import { initializeMediaRuntime }                                from '../services/mediaService.js';
-import { initializeNotificationRuntime }                         from '../services/notificationService.js';
-import { initializeReconstructionRuntime }                       from '../services/reconstructionService.js';
+import { initializeDogRuntime }                                   from '../services/dogService.js';
+import { initializeAIRuntime }                                    from '../services/aiService.js';
+import { initializeMediaRuntime }                                 from '../services/mediaService.js';
+import { initializeNotificationRuntime }                          from '../services/notificationService.js';
+import { initializeReconstructionRuntime }                        from '../services/reconstructionService.js';
 
 // Agents — Run 5
-import { registerRuntimeAgent, getRegistryStatus }               from '../agents/registry.js';
-import { initializeAgentLifecycle }                              from '../agents/lifecycle.js';
+import { registerRuntimeAgent, getRegistryStatus }                from '../agents/registry.js';
+import { initializeAgentLifecycle }                               from '../agents/lifecycle.js';
+import { initializeSupervisor, registerAgent, registerTaskHandler } from '../agents/supervisorAgent.js';
+import { initializeMemoryAgent, MEMORY_AGENT_DESCRIPTOR, memoryTaskHandler }               from '../agents/memoryAgent.js';
+import { initializeEmotionAgent, EMOTION_AGENT_DESCRIPTOR, emotionTaskHandler }            from '../agents/emotionAgent.js';
+import { initializeDogAgent, DOG_AGENT_DESCRIPTOR, dogTaskHandler }                        from '../agents/dogAgent.js';
+import { initializeConversationAgent, CONVERSATION_AGENT_DESCRIPTOR, conversationTaskHandler } from '../agents/conversationAgent.js';
+import { initializeRoutineAgent, ROUTINE_AGENT_DESCRIPTOR, routineTaskHandler }            from '../agents/routineAgent.js';
+import { initializeRecoveryAgent, RECOVERY_AGENT_DESCRIPTOR, recoveryTaskHandler }         from '../agents/recoveryAgent.js';
+
+// Companion Engines — Run 6
 import {
-  initializeSupervisor,
-  registerAgent,
-  registerTaskHandler,
-}                                                                from '../agents/supervisorAgent.js';
+  initializePersonalityProfile,
+  getPersonalityEngineStatus,
+}                                                                 from '../dog/personalityEngine.js';
 import {
-  initializeMemoryAgent,
-  MEMORY_AGENT_DESCRIPTOR,
-  memoryTaskHandler,
-}                                                                from '../agents/memoryAgent.js';
+  initializeEmotionState,
+  getEmotionEngineStatus,
+}                                                                 from '../dog/emotionEngine.js';
 import {
-  initializeEmotionAgent,
-  EMOTION_AGENT_DESCRIPTOR,
-  emotionTaskHandler,
-}                                                                from '../agents/emotionAgent.js';
+  initializeMemoryState,
+  getMemoryEngineStatus,
+}                                                                 from '../dog/memoryEngine.js';
 import {
-  initializeDogAgent,
-  DOG_AGENT_DESCRIPTOR,
-  dogTaskHandler,
-}                                                                from '../agents/dogAgent.js';
+  initializeBehaviorState,
+  getBehaviorEngineStatus,
+}                                                                 from '../dog/behaviorEngine.js';
 import {
-  initializeConversationAgent,
-  CONVERSATION_AGENT_DESCRIPTOR,
-  conversationTaskHandler,
-}                                                                from '../agents/conversationAgent.js';
+  initializeBondState,
+  getBondingEngineStatus,
+}                                                                 from '../dog/bondingEngine.js';
 import {
-  initializeRoutineAgent,
-  ROUTINE_AGENT_DESCRIPTOR,
-  routineTaskHandler,
-}                                                                from '../agents/routineAgent.js';
-import {
-  initializeRecoveryAgent,
-  RECOVERY_AGENT_DESCRIPTOR,
-  recoveryTaskHandler,
-}                                                                from '../agents/recoveryAgent.js';
+  initializeRoutineState,
+  getRoutineEngineStatus,
+}                                                                 from '../dog/routineEngine.js';
+
+import { getDogState }                                            from '../state/dogState.js';
 
 // ----------------------------------------------------------------
 // EXTENDED BOOT STAGES
@@ -110,19 +112,21 @@ import {
 
 const BOOT = {
   ...BOOT_STAGES,
-  INITIALIZING_STORAGE:         'INITIALIZING_STORAGE',
-  VALIDATING_SCHEMAS:           'VALIDATING_SCHEMAS',
-  RUNNING_MIGRATIONS:           'RUNNING_MIGRATIONS',
-  INITIALIZING_STATE_LAYER:     'INITIALIZING_STATE_LAYER',
-  INITIALIZING_EVENT_SYSTEM:    'INITIALIZING_EVENT_SYSTEM',
-  REGISTERING_EVENT_CONTRACTS:  'REGISTERING_EVENT_CONTRACTS',
-  HYDRATING_RUNTIME:            'HYDRATING_RUNTIME',
-  RESTORING_SESSIONS:           'RESTORING_SESSIONS',
-  REGISTERING_SERVICES:         'REGISTERING_SERVICES',
-  INITIALIZING_AGENT_REGISTRY:  'INITIALIZING_AGENT_REGISTRY',
-  INITIALIZING_LIFECYCLE:       'INITIALIZING_LIFECYCLE',
-  INITIALIZING_SUPERVISOR:      'INITIALIZING_SUPERVISOR',
-  REGISTERING_AGENTS:           'REGISTERING_AGENTS',
+  INITIALIZING_STORAGE:           'INITIALIZING_STORAGE',
+  VALIDATING_SCHEMAS:             'VALIDATING_SCHEMAS',
+  RUNNING_MIGRATIONS:             'RUNNING_MIGRATIONS',
+  INITIALIZING_STATE_LAYER:       'INITIALIZING_STATE_LAYER',
+  INITIALIZING_EVENT_SYSTEM:      'INITIALIZING_EVENT_SYSTEM',
+  REGISTERING_EVENT_CONTRACTS:    'REGISTERING_EVENT_CONTRACTS',
+  HYDRATING_RUNTIME:              'HYDRATING_RUNTIME',
+  RESTORING_SESSIONS:             'RESTORING_SESSIONS',
+  REGISTERING_SERVICES:           'REGISTERING_SERVICES',
+  INITIALIZING_AGENT_REGISTRY:    'INITIALIZING_AGENT_REGISTRY',
+  INITIALIZING_LIFECYCLE:         'INITIALIZING_LIFECYCLE',
+  INITIALIZING_SUPERVISOR:        'INITIALIZING_SUPERVISOR',
+  REGISTERING_AGENTS:             'REGISTERING_AGENTS',
+  INITIALIZING_COMPANION_ENGINES: 'INITIALIZING_COMPANION_ENGINES',
+  SYNCHRONIZING_COMPANION_RUNTIME:'SYNCHRONIZING_COMPANION_RUNTIME',
 };
 
 // ----------------------------------------------------------------
@@ -160,12 +164,12 @@ function emitRuntimeEvent(eventName, detail = {}) {
 // ----------------------------------------------------------------
 
 export async function initializeApp(onReady) {
-  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 5 — 22 Steps)');
+  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 6 — 24 Steps)');
   _bootState.startedAt = Date.now();
   BootLogger.info(`Boot started at: ${new Date(_bootState.startedAt).toISOString()}`);
 
   try {
-    // ── STEP 1: Validate Environment ─────────────────────────────
+    // ── STEP 1 ────────────────────────────────────────────────────
     setStage(BOOT.VALIDATING_ENVIRONMENT);
     const envValidation = validateEnvironment();
     if (!envValidation.passed) {
@@ -175,11 +179,11 @@ export async function initializeApp(onReady) {
       BootLogger.warn(`Environment warnings: ${envValidation.warnings.join(', ')}`);
     }
 
-    // ── STEP 2: Initialize Runtime ───────────────────────────────
+    // ── STEP 2 ────────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_RUNTIME);
     await initializeRuntime();
 
-    // ── STEP 3: Validate Runtime Contracts ───────────────────────
+    // ── STEP 3 ────────────────────────────────────────────────────
     setStage(BOOT.VALIDATING_RUNTIME_CONTRACTS);
     const runtimeSnapshot = getCoreRuntimeState();
     const contractValidation = validateRuntimeContracts(runtimeSnapshot);
@@ -187,12 +191,12 @@ export async function initializeApp(onReady) {
       throw new Error(`Runtime contracts failed: ${contractValidation.failed.join(', ')}`);
     }
 
-    // ── STEP 4: Initialize Storage ───────────────────────────────
+    // ── STEP 4 ────────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_STORAGE);
     await initializeStorage();
     registerModule('storage', { version: getMigrationVersion() });
 
-    // ── STEP 5: Validate Schemas ─────────────────────────────────
+    // ── STEP 5 ────────────────────────────────────────────────────
     setStage(BOOT.VALIDATING_SCHEMAS);
     const storeNames = getAllStoreNames();
     if (storeNames.length === 0) throw new Error('No stores registered.');
@@ -205,7 +209,7 @@ export async function initializeApp(onReady) {
     }
     BootLogger.info(`Schema validation passed — ${storeNames.length} store(s).`);
 
-    // ── STEP 6: Validate Migration State ─────────────────────────
+    // ── STEP 6 ────────────────────────────────────────────────────
     setStage(BOOT.RUNNING_MIGRATIONS);
     const db = getStorage();
     const migrationState = validateMigrationState(db);
@@ -214,7 +218,7 @@ export async function initializeApp(onReady) {
     }
     BootLogger.info(`Migration state valid — v${getMigrationVersion()}.`);
 
-    // ── STEP 7: Initialize State Layer ───────────────────────────
+    // ── STEP 7 ────────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_STATE_LAYER);
     updateAppState({
       initialized: true,
@@ -227,115 +231,163 @@ export async function initializeApp(onReady) {
     });
     registerActiveModule('stateLayer', { initializedAt: Date.now() });
 
-    // ── STEP 8: Initialize Event System ──────────────────────────
+    // ── STEP 8 ────────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_EVENT_SYSTEM);
     initializeEventBus({ debugMode: runtimeSnapshot.mode === 'development' });
     registerModule('eventBus', { initializedAt: Date.now() });
 
-    // ── STEP 9: Register Event Contracts ─────────────────────────
+    // ── STEP 9 ────────────────────────────────────────────────────
     setStage(BOOT.REGISTERING_EVENT_CONTRACTS);
     const contractCount = registerAllContracts();
     BootLogger.info(`${contractCount} event contracts registered.`);
 
-    // ── STEP 10: Initialize Hydration System ─────────────────────
+    // ── STEP 10 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_HYDRATION);
     await initializeHydration();
 
-    // ── STEP 11: Hydrate Runtime State ───────────────────────────
+    // ── STEP 11 ───────────────────────────────────────────────────
     setStage(BOOT.HYDRATING_RUNTIME);
     await hydrateRuntime();
 
-    // ── STEP 12: Initialize Recovery Engine ──────────────────────
+    // ── STEP 12 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_RECOVERY);
     initializeRecovery();
     updateAppState({ flags: { recoveryReady: true } });
 
-    // ── STEP 13: Restore Active Sessions ─────────────────────────
+    // ── STEP 13 ───────────────────────────────────────────────────
     setStage(BOOT.RESTORING_SESSIONS);
     const sessionState = getSessionState();
     if (sessionState.status === 'none' || sessionState.status === 'failed') {
       createSession({ bootRestored: true });
-      BootLogger.warn('[Boot] Session not restored by hydration — fresh session created.');
+      BootLogger.warn('[Boot] Session not restored — fresh session created.');
     } else {
       BootLogger.info(`[Boot] Session: ${sessionState.sessionId} (${sessionState.status})`);
     }
     updateAppState({ flags: { sessionReady: true } });
     updateRuntimeState({ sessionRestored: true });
 
-    // ── STEP 14: Register Services ───────────────────────────────
+    // ── STEP 14 ───────────────────────────────────────────────────
     setStage(BOOT.REGISTERING_SERVICES);
     await initializeDogRuntime();
-    registerActiveModule('dogService',    { initializedAt: Date.now() });
+    registerActiveModule('dogService', { initializedAt: Date.now() });
     await initializeAIRuntime();
-    registerActiveModule('aiService',     { initializedAt: Date.now() });
+    registerActiveModule('aiService', { initializedAt: Date.now() });
     await initializeMediaRuntime();
-    registerActiveModule('mediaService',  { initializedAt: Date.now() });
+    registerActiveModule('mediaService', { initializedAt: Date.now() });
     initializeNotificationRuntime();
     registerActiveModule('notificationService', { initializedAt: Date.now() });
     await initializeReconstructionRuntime();
     registerActiveModule('reconstructionService', { initializedAt: Date.now() });
     BootLogger.info('All services registered.');
 
-    // ── STEP 15: Initialize Agent Registry ───────────────────────
+    // ── STEP 15 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_AGENT_REGISTRY);
-    // Registry is module-level singleton — validate it's accessible
     const registryStatus = getRegistryStatus();
-    BootLogger.info(`[Boot] Agent registry ready — ${registryStatus.total} agent(s) pre-registered.`);
+    BootLogger.info(`Agent registry ready — ${registryStatus.total} pre-registered.`);
     registerActiveModule('agentRegistry', { initializedAt: Date.now() });
 
-    // ── STEP 16: Initialize Lifecycle Controller ──────────────────
+    // ── STEP 16 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_LIFECYCLE);
     initializeAgentLifecycle();
     registerActiveModule('lifecycleController', { initializedAt: Date.now() });
-    BootLogger.info('[Boot] Agent lifecycle controller initialized.');
 
-    // ── STEP 17: Initialize Supervisor Agent ─────────────────────
+    // ── STEP 17 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_SUPERVISOR);
     await initializeSupervisor();
     registerActiveModule('supervisorAgent', { initializedAt: Date.now() });
-    BootLogger.info('[Boot] Supervisor agent active.');
 
-    // ── STEP 18: Register Specialized Agents ─────────────────────
+    // ── STEP 18 ───────────────────────────────────────────────────
     setStage(BOOT.REGISTERING_AGENTS);
-
-    // Memory agent
     await initializeMemoryAgent();
     await registerAgent(MEMORY_AGENT_DESCRIPTOR, memoryTaskHandler);
     registerActiveModule('memoryAgent', { initializedAt: Date.now() });
 
-    // Emotion agent
     await initializeEmotionAgent();
     await registerAgent(EMOTION_AGENT_DESCRIPTOR, emotionTaskHandler);
     registerActiveModule('emotionAgent', { initializedAt: Date.now() });
 
-    // Dog agent
     await initializeDogAgent();
     await registerAgent(DOG_AGENT_DESCRIPTOR, dogTaskHandler);
     registerActiveModule('dogAgent', { initializedAt: Date.now() });
 
-    // Conversation agent
     await initializeConversationAgent();
     await registerAgent(CONVERSATION_AGENT_DESCRIPTOR, conversationTaskHandler);
     registerActiveModule('conversationAgent', { initializedAt: Date.now() });
 
-    // Routine agent
     await initializeRoutineAgent();
     await registerAgent(ROUTINE_AGENT_DESCRIPTOR, routineTaskHandler);
     registerActiveModule('routineAgent', { initializedAt: Date.now() });
 
-    // Recovery agent
     await initializeRecoveryAgent();
     await registerAgent(RECOVERY_AGENT_DESCRIPTOR, recoveryTaskHandler);
     registerActiveModule('recoveryAgent', { initializedAt: Date.now() });
 
-    BootLogger.info('[Boot] All specialized agents registered and active.');
+    BootLogger.info('All specialized agents registered.');
 
-    // ── STEP 19: Initialize Scheduler ────────────────────────────
+    // ── STEP 19: Initialize Companion Engines ─────────────────────
+    setStage(BOOT.INITIALIZING_COMPANION_ENGINES);
+    const dogState = getDogState();
+    const profileId = dogState.profileId;
+
+    if (profileId) {
+      // Initialize all engines for the hydrated profile
+      initializePersonalityProfile(profileId);
+      initializeEmotionState(profileId);
+      initializeMemoryState(profileId);
+      initializeBehaviorState(profileId);
+      initializeBondState(profileId);
+      initializeRoutineState(profileId);
+
+      BootLogger.info(`[Boot] Companion engines initialized for profile: ${profileId}`);
+    } else {
+      BootLogger.info('[Boot] No dog profile loaded — companion engines on standby.');
+    }
+
+    registerActiveModule('companionEngines', {
+      initializedAt: Date.now(),
+      profileId:     profileId || null,
+      engines: [
+        'personalityEngine', 'emotionEngine', 'memoryEngine',
+        'behaviorEngine', 'bondingEngine', 'routineEngine',
+      ],
+    });
+
+    // ── STEP 20: Synchronize Companion Runtime ────────────────────
+    setStage(BOOT.SYNCHRONIZING_COMPANION_RUNTIME);
+
+    const engineStatus = {
+      personality: getPersonalityEngineStatus(),
+      emotion:     getEmotionEngineStatus(),
+      memory:      getMemoryEngineStatus(),
+      behavior:    getBehaviorEngineStatus(),
+      bonding:     getBondingEngineStatus(),
+      routine:     getRoutineEngineStatus(),
+    };
+
+    BootLogger.info(
+      `[Boot] Companion runtime synchronized — ` +
+      `personality: ${engineStatus.personality.totalProfiles} profile(s), ` +
+      `emotion: ${engineStatus.emotion.totalProfiles}, ` +
+      `behavior: ${engineStatus.behavior.totalProfiles}.`
+    );
+
+    updateAppState({
+      activeModules: {
+        companionRuntime: {
+          synchronized: true,
+          profileId:    profileId || null,
+          engineStatus,
+          synchronizedAt: Date.now(),
+        },
+      },
+    });
+
+    // ── STEP 21 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_SCHEDULER);
     initializeScheduler();
     updateAppState({ flags: { schedulerReady: true } });
 
-    // ── STEP 20: Emit RUNTIME_INITIALIZED ────────────────────────
+    // ── STEP 22 ───────────────────────────────────────────────────
     setStage(BOOT.EMITTING_RUNTIME_INITIALIZED);
     markRuntimeReady();
     markBootComplete();
@@ -348,22 +400,20 @@ export async function initializeApp(onReady) {
       runtimeState: getCoreRuntimeState(),
     });
 
-    // ── STEP 21: Mount Application ───────────────────────────────
+    // ── STEP 23 ───────────────────────────────────────────────────
     setStage(BOOT.MOUNTING_APPLICATION);
     BootLogger.info('Handing off to application mount...');
     if (typeof onReady === 'function') {
       await onReady();
     }
 
-    // ── STEP 22: Emit APP_READY ───────────────────────────────────
+    // ── STEP 24 ───────────────────────────────────────────────────
     setStage(BOOT.APP_READY);
     _bootState.completedAt = Date.now();
     emitRuntimeEvent(RUNTIME_EVENTS.APP_READY, {
       duration: _bootState.completedAt - _bootState.startedAt,
     });
-
     BootLogger.info(`Boot COMPLETE — ${_bootState.completedAt - _bootState.startedAt}ms`);
-    BootLogger.info('Stage timings:', _bootState.timings);
 
   } catch (err) {
     _bootState.stage = BOOT.FATAL_ERROR;
