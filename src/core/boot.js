@@ -1,6 +1,6 @@
 // ================================================================
-// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 6)
-// Deterministic 24-step boot pipeline.
+// IMMORTAIL™ — CENTRAL APPLICATION BOOTSTRAPPER (Run 7)
+// Deterministic 26-step boot pipeline.
 //
 // BOOT ORDER:
 //  1.  validate environment
@@ -23,14 +23,16 @@
 //  18. register specialized agents
 //  19. initialize companion engines
 //  20. synchronize companion runtime
-//  21. initialize scheduler
-//  22. emit runtime initialized
-//  23. mount application
-//  24. emit APP_READY
+//  21. initialize media pipeline
+//  22. initialize reconstruction foundation
+//  23. initialize scheduler
+//  24. emit runtime initialized
+//  25. mount application
+//  26. emit APP_READY
 // ================================================================
 
 import { BOOT_STAGES, RUNTIME_EVENTS } from '../utils/constants.js';
-import { BootLogger } from '../utils/logger.js';
+import { BootLogger }                   from '../utils/logger.js';
 
 // Core — Run 1
 import { validateEnvironment, validateRuntimeContracts }         from './validation.js';
@@ -70,41 +72,29 @@ import { initializeReconstructionRuntime }                        from '../servi
 // Agents — Run 5
 import { registerRuntimeAgent, getRegistryStatus }                from '../agents/registry.js';
 import { initializeAgentLifecycle }                               from '../agents/lifecycle.js';
-import { initializeSupervisor, registerAgent, registerTaskHandler } from '../agents/supervisorAgent.js';
-import { initializeMemoryAgent, MEMORY_AGENT_DESCRIPTOR, memoryTaskHandler }               from '../agents/memoryAgent.js';
-import { initializeEmotionAgent, EMOTION_AGENT_DESCRIPTOR, emotionTaskHandler }            from '../agents/emotionAgent.js';
-import { initializeDogAgent, DOG_AGENT_DESCRIPTOR, dogTaskHandler }                        from '../agents/dogAgent.js';
+import { initializeSupervisor, registerAgent }                    from '../agents/supervisorAgent.js';
+import { initializeMemoryAgent, MEMORY_AGENT_DESCRIPTOR, memoryTaskHandler }                   from '../agents/memoryAgent.js';
+import { initializeEmotionAgent, EMOTION_AGENT_DESCRIPTOR, emotionTaskHandler }                from '../agents/emotionAgent.js';
+import { initializeDogAgent, DOG_AGENT_DESCRIPTOR, dogTaskHandler }                            from '../agents/dogAgent.js';
 import { initializeConversationAgent, CONVERSATION_AGENT_DESCRIPTOR, conversationTaskHandler } from '../agents/conversationAgent.js';
-import { initializeRoutineAgent, ROUTINE_AGENT_DESCRIPTOR, routineTaskHandler }            from '../agents/routineAgent.js';
-import { initializeRecoveryAgent, RECOVERY_AGENT_DESCRIPTOR, recoveryTaskHandler }         from '../agents/recoveryAgent.js';
+import { initializeRoutineAgent, ROUTINE_AGENT_DESCRIPTOR, routineTaskHandler }                from '../agents/routineAgent.js';
+import { initializeRecoveryAgent, RECOVERY_AGENT_DESCRIPTOR, recoveryTaskHandler }             from '../agents/recoveryAgent.js';
 
 // Companion Engines — Run 6
-import {
-  initializePersonalityProfile,
-  getPersonalityEngineStatus,
-}                                                                 from '../dog/personalityEngine.js';
-import {
-  initializeEmotionState,
-  getEmotionEngineStatus,
-}                                                                 from '../dog/emotionEngine.js';
-import {
-  initializeMemoryState,
-  getMemoryEngineStatus,
-}                                                                 from '../dog/memoryEngine.js';
-import {
-  initializeBehaviorState,
-  getBehaviorEngineStatus,
-}                                                                 from '../dog/behaviorEngine.js';
-import {
-  initializeBondState,
-  getBondingEngineStatus,
-}                                                                 from '../dog/bondingEngine.js';
-import {
-  initializeRoutineState,
-  getRoutineEngineStatus,
-}                                                                 from '../dog/routineEngine.js';
+import { initializePersonalityProfile, getPersonalityEngineStatus } from '../dog/personalityEngine.js';
+import { initializeEmotionState, getEmotionEngineStatus }           from '../dog/emotionEngine.js';
+import { initializeMemoryState, getMemoryEngineStatus }             from '../dog/memoryEngine.js';
+import { initializeBehaviorState, getBehaviorEngineStatus }         from '../dog/behaviorEngine.js';
+import { initializeBondState, getBondingEngineStatus }              from '../dog/bondingEngine.js';
+import { initializeRoutineState, getRoutineEngineStatus }           from '../dog/routineEngine.js';
+import { getDogState }                                              from '../state/dogState.js';
 
-import { getDogState }                                            from '../state/dogState.js';
+// Media — Run 7
+import {
+  initializeUploadPipeline,
+  getPipelineStatus,
+}                                                                   from '../media/uploadPipeline.js';
+import { getIdentityProfileEngineStatus }                           from '../media/identityProfile.js';
 
 // ----------------------------------------------------------------
 // EXTENDED BOOT STAGES
@@ -112,21 +102,23 @@ import { getDogState }                                            from '../state
 
 const BOOT = {
   ...BOOT_STAGES,
-  INITIALIZING_STORAGE:           'INITIALIZING_STORAGE',
-  VALIDATING_SCHEMAS:             'VALIDATING_SCHEMAS',
-  RUNNING_MIGRATIONS:             'RUNNING_MIGRATIONS',
-  INITIALIZING_STATE_LAYER:       'INITIALIZING_STATE_LAYER',
-  INITIALIZING_EVENT_SYSTEM:      'INITIALIZING_EVENT_SYSTEM',
-  REGISTERING_EVENT_CONTRACTS:    'REGISTERING_EVENT_CONTRACTS',
-  HYDRATING_RUNTIME:              'HYDRATING_RUNTIME',
-  RESTORING_SESSIONS:             'RESTORING_SESSIONS',
-  REGISTERING_SERVICES:           'REGISTERING_SERVICES',
-  INITIALIZING_AGENT_REGISTRY:    'INITIALIZING_AGENT_REGISTRY',
-  INITIALIZING_LIFECYCLE:         'INITIALIZING_LIFECYCLE',
-  INITIALIZING_SUPERVISOR:        'INITIALIZING_SUPERVISOR',
-  REGISTERING_AGENTS:             'REGISTERING_AGENTS',
-  INITIALIZING_COMPANION_ENGINES: 'INITIALIZING_COMPANION_ENGINES',
-  SYNCHRONIZING_COMPANION_RUNTIME:'SYNCHRONIZING_COMPANION_RUNTIME',
+  INITIALIZING_STORAGE:              'INITIALIZING_STORAGE',
+  VALIDATING_SCHEMAS:                'VALIDATING_SCHEMAS',
+  RUNNING_MIGRATIONS:                'RUNNING_MIGRATIONS',
+  INITIALIZING_STATE_LAYER:          'INITIALIZING_STATE_LAYER',
+  INITIALIZING_EVENT_SYSTEM:         'INITIALIZING_EVENT_SYSTEM',
+  REGISTERING_EVENT_CONTRACTS:       'REGISTERING_EVENT_CONTRACTS',
+  HYDRATING_RUNTIME:                 'HYDRATING_RUNTIME',
+  RESTORING_SESSIONS:                'RESTORING_SESSIONS',
+  REGISTERING_SERVICES:              'REGISTERING_SERVICES',
+  INITIALIZING_AGENT_REGISTRY:       'INITIALIZING_AGENT_REGISTRY',
+  INITIALIZING_LIFECYCLE:            'INITIALIZING_LIFECYCLE',
+  INITIALIZING_SUPERVISOR:           'INITIALIZING_SUPERVISOR',
+  REGISTERING_AGENTS:                'REGISTERING_AGENTS',
+  INITIALIZING_COMPANION_ENGINES:    'INITIALIZING_COMPANION_ENGINES',
+  SYNCHRONIZING_COMPANION_RUNTIME:   'SYNCHRONIZING_COMPANION_RUNTIME',
+  INITIALIZING_MEDIA_PIPELINE:       'INITIALIZING_MEDIA_PIPELINE',
+  INITIALIZING_RECONSTRUCTION:       'INITIALIZING_RECONSTRUCTION',
 };
 
 // ----------------------------------------------------------------
@@ -164,7 +156,7 @@ function emitRuntimeEvent(eventName, detail = {}) {
 // ----------------------------------------------------------------
 
 export async function initializeApp(onReady) {
-  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 6 — 24 Steps)');
+  BootLogger.group('IMMORTAIL™ Boot Pipeline (Run 7 — 26 Steps)');
   _bootState.startedAt = Date.now();
   BootLogger.info(`Boot started at: ${new Date(_bootState.startedAt).toISOString()}`);
 
@@ -324,20 +316,18 @@ export async function initializeApp(onReady) {
 
     BootLogger.info('All specialized agents registered.');
 
-    // ── STEP 19: Initialize Companion Engines ─────────────────────
+    // ── STEP 19 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_COMPANION_ENGINES);
-    const dogState = getDogState();
-    const profileId = dogState.profileId;
+    const dogState   = getDogState();
+    const profileId  = dogState.profileId;
 
     if (profileId) {
-      // Initialize all engines for the hydrated profile
       initializePersonalityProfile(profileId);
       initializeEmotionState(profileId);
       initializeMemoryState(profileId);
       initializeBehaviorState(profileId);
       initializeBondState(profileId);
       initializeRoutineState(profileId);
-
       BootLogger.info(`[Boot] Companion engines initialized for profile: ${profileId}`);
     } else {
       BootLogger.info('[Boot] No dog profile loaded — companion engines on standby.');
@@ -346,15 +336,10 @@ export async function initializeApp(onReady) {
     registerActiveModule('companionEngines', {
       initializedAt: Date.now(),
       profileId:     profileId || null,
-      engines: [
-        'personalityEngine', 'emotionEngine', 'memoryEngine',
-        'behaviorEngine', 'bondingEngine', 'routineEngine',
-      ],
     });
 
-    // ── STEP 20: Synchronize Companion Runtime ────────────────────
+    // ── STEP 20 ───────────────────────────────────────────────────
     setStage(BOOT.SYNCHRONIZING_COMPANION_RUNTIME);
-
     const engineStatus = {
       personality: getPersonalityEngineStatus(),
       emotion:     getEmotionEngineStatus(),
@@ -363,31 +348,46 @@ export async function initializeApp(onReady) {
       bonding:     getBondingEngineStatus(),
       routine:     getRoutineEngineStatus(),
     };
-
-    BootLogger.info(
-      `[Boot] Companion runtime synchronized — ` +
-      `personality: ${engineStatus.personality.totalProfiles} profile(s), ` +
-      `emotion: ${engineStatus.emotion.totalProfiles}, ` +
-      `behavior: ${engineStatus.behavior.totalProfiles}.`
-    );
-
     updateAppState({
       activeModules: {
         companionRuntime: {
-          synchronized: true,
-          profileId:    profileId || null,
+          synchronized:   true,
+          profileId:      profileId || null,
           engineStatus,
           synchronizedAt: Date.now(),
         },
       },
     });
+    BootLogger.info('[Boot] Companion runtime synchronized.');
 
-    // ── STEP 21 ───────────────────────────────────────────────────
+    // ── STEP 21: Initialize Media Pipeline ───────────────────────
+    setStage(BOOT.INITIALIZING_MEDIA_PIPELINE);
+    initializeUploadPipeline();
+    const pipelineStatus = getPipelineStatus();
+    registerActiveModule('uploadPipeline', {
+      initializedAt: Date.now(),
+      status:        pipelineStatus,
+    });
+    BootLogger.info('[Boot] Media ingestion pipeline initialized.');
+
+    // ── STEP 22: Initialize Reconstruction Foundation ─────────────
+    setStage(BOOT.INITIALIZING_RECONSTRUCTION);
+    const identityStatus = getIdentityProfileEngineStatus();
+    registerActiveModule('identityProfileEngine', {
+      initializedAt:  Date.now(),
+      totalProfiles:  identityStatus.totalProfiles,
+    });
+    BootLogger.info(
+      `[Boot] Identity reconstruction foundation ready — ` +
+      `${identityStatus.totalProfiles} profile(s) in registry.`
+    );
+
+    // ── STEP 23 ───────────────────────────────────────────────────
     setStage(BOOT.INITIALIZING_SCHEDULER);
     initializeScheduler();
     updateAppState({ flags: { schedulerReady: true } });
 
-    // ── STEP 22 ───────────────────────────────────────────────────
+    // ── STEP 24 ───────────────────────────────────────────────────
     setStage(BOOT.EMITTING_RUNTIME_INITIALIZED);
     markRuntimeReady();
     markBootComplete();
@@ -400,14 +400,14 @@ export async function initializeApp(onReady) {
       runtimeState: getCoreRuntimeState(),
     });
 
-    // ── STEP 23 ───────────────────────────────────────────────────
+    // ── STEP 25 ───────────────────────────────────────────────────
     setStage(BOOT.MOUNTING_APPLICATION);
     BootLogger.info('Handing off to application mount...');
     if (typeof onReady === 'function') {
       await onReady();
     }
 
-    // ── STEP 24 ───────────────────────────────────────────────────
+    // ── STEP 26 ───────────────────────────────────────────────────
     setStage(BOOT.APP_READY);
     _bootState.completedAt = Date.now();
     emitRuntimeEvent(RUNTIME_EVENTS.APP_READY, {
