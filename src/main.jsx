@@ -1,58 +1,24 @@
-// ================================================================
-// IMMORTAIL™ — APPLICATION ENTRY POINT (Run 9)
-// Boot sequence invocation + React mount.
-// NO UI LOGIC HERE. PURE ORCHESTRATION.
-// ================================================================
-
-import React       from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import './index.css';
-import App         from './App.jsx';
+import App from './App.jsx';
 import { initializeApp } from './core/boot.js';
+import './index.css';
 
-// ----------------------------------------------------------------
-// PWA — Viewport meta enforcement
-// ----------------------------------------------------------------
+const root = createRoot(document.getElementById('root'));
 
-if (typeof document !== 'undefined') {
-  let viewportMeta = document.querySelector('meta[name="viewport"]');
-  if (!viewportMeta) {
-    viewportMeta = document.createElement('meta');
-    viewportMeta.name = 'viewport';
-    document.head.appendChild(viewportMeta);
-  }
-  viewportMeta.content =
-    'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1';
-}
-
-// ----------------------------------------------------------------
-// REACT MOUNT
-// ----------------------------------------------------------------
-
-const container = document.getElementById('root');
-
-if (!container) {
-  console.error('[IMMORTAIL] Fatal: #root element not found in DOM.');
-} else {
-  const root = createRoot(container);
-
-  // Mount immediately — App handles loading/boot states internally
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-
-  // ── Boot sequence ──────────────────────────────────────────────
-  // Run after first render so the loading screen is visible
-  initializeApp(async () => {
-    // onReady callback — boot complete, app transitions to ready state
-    // DOM CustomEvent dispatched by boot.js → App picks it up
-    window.dispatchEvent(new CustomEvent('immortailapp:app_ready'));
-  }).catch((err) => {
-    console.error('[IMMORTAIL] Fatal boot error:', err);
-    window.dispatchEvent(
-      new CustomEvent('immortailapp:boot_failed', { detail: { error: err.message } })
+// Boot first, then mount
+initializeApp().then((result) => {
+  if (!result.ok) {
+    root.render(
+      <div style={{
+        display:'flex', alignItems:'center', justifyContent:'center',
+        height:'100vh', color:'#ff6b6b', fontFamily:'monospace', fontSize:14,
+        background:'#0f0f13', padding:24, textAlign:'center',
+      }}>
+        Boot failed: {result.error}
+      </div>
     );
-  });
-}
+    return;
+  }
+  root.render(<App bootResult={result} />);
+});

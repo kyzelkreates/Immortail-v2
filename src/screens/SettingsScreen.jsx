@@ -1,135 +1,101 @@
-// ================================================================
-// IMMORTAIL™ — SETTINGS SCREEN
-// System configuration UI. READ-ONLY display + service calls only.
-// NO ENGINE LOGIC.
-// ================================================================
+import React, { useState } from 'react';
+import useDog from '../hooks/useDog.js';
+import storage from '../core/storage.js';
 
-import React from 'react';
-import { useRuntimeState } from '../hooks/useRuntimeState.js';
-import { useAppState }     from '../hooks/useAppState.js';
-import { MainLayout }      from '../layouts/MainLayout.jsx';
-import { DashboardLayout } from '../layouts/DashboardLayout.jsx';
-import { formatLabel, formatRelativeTime } from '../utils/formatters.js';
-import { mapSystemHealth, cx } from '../utils/uiHelpers.js';
+export default function SettingsScreen() {
+  const { dog, changeName, reset } = useDog();
+  const [nameInput, setNameInput] = useState(dog.name);
+  const [saved, setSaved] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
-export function SettingsScreen({ onNavigate, onServiceCall }) {
-  const runtime  = useRuntimeState();
-  const appState = useAppState();
-  const status   = mapSystemHealth(runtime);
+  function handleSaveName(e) {
+    e.preventDefault();
+    if (!nameInput.trim()) return;
+    changeName(nameInput.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
+  function handleReset() {
+    if (!confirmReset) { setConfirmReset(true); return; }
+    reset();
+    setNameInput('Luna');
+    setConfirmReset(false);
+  }
+
+  const memories = storage.getMemories();
 
   return (
-    <MainLayout screen="settings" onNavigate={onNavigate} systemStatus={status}>
-      <DashboardLayout title="Settings" subtitle="System configuration">
+    <div className="screen settings-screen">
+      <header className="screen-header">
+        <h1>Settings</h1>
+        <p className="screen-subtitle">Companion configuration</p>
+      </header>
 
-        {/* Runtime info */}
-        <section style={styles.section}>
-          <h4 style={styles.sectionTitle}>Runtime Info</h4>
-          <div className="card">
-            <SettingRow label="Version"     value={runtime?.version     || '—'} />
-            <SettingRow label="Build"       value={runtime?.build       || '—'} />
-            <SettingRow label="Environment" value={runtime?.environment?.platform || '—'} />
-            <SettingRow label="Mode"        value={runtime?.mode        || '—'} />
-          </div>
+      <div className="settings-body">
+
+        {/* Name */}
+        <section className="settings-section">
+          <h2 className="settings-label">Companion Name</h2>
+          <form onSubmit={handleSaveName} className="name-form">
+            <input
+              className="name-input"
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              maxLength={24}
+              placeholder="Enter a name…"
+              aria-label="Companion name"
+            />
+            <button type="submit" className="btn-primary">
+              {saved ? '✓ Saved' : 'Save'}
+            </button>
+          </form>
         </section>
 
-        {/* Storage info */}
-        <section style={styles.section}>
-          <h4 style={styles.sectionTitle}>Storage</h4>
-          <div className="card">
-            <SettingRow label="Schema version"    value={appState?.activeModules?.storage?.version    || '—'} />
-            <SettingRow label="Storage ready"     value={appState?.flags?.storageReady     ? '✅' : '❌'} />
-            <SettingRow label="Scheduler ready"   value={appState?.flags?.schedulerReady   ? '✅' : '❌'} />
-            <SettingRow label="Recovery ready"    value={appState?.flags?.recoveryReady    ? '✅' : '❌'} />
-          </div>
-        </section>
-
-        {/* System actions */}
-        <section style={styles.section}>
-          <h4 style={styles.sectionTitle}>Actions</h4>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <ActionButton
-              label="Export System State"
-              desc="Download a JSON snapshot of current runtime state"
-              onClick={() => onServiceCall?.('exportState')}
-            />
-            <ActionButton
-              label="Clear Session"
-              desc="Reset the current session (will reboot)"
-              danger
-              onClick={() => onServiceCall?.('clearSession')}
-            />
+        {/* Stats */}
+        <section className="settings-section">
+          <h2 className="settings-label">Stats</h2>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-value">{dog.totalInteractions}</div>
+              <div className="stat-name">Interactions</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{dog.bonding}%</div>
+              <div className="stat-name">Bond</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{memories.length}</div>
+              <div className="stat-name">Memories</div>
+            </div>
           </div>
         </section>
 
         {/* About */}
-        <section style={styles.section}>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-              IMMORTAIL™ — Run 9 Build<br />
-              Strict SSOT Architecture
-            </p>
+        <section className="settings-section">
+          <h2 className="settings-label">About</h2>
+          <div className="about-card">
+            <p><strong>IMMORTAIL™</strong></p>
+            <p className="about-sub">Local-first companion. All data stays on your device.</p>
+            <p className="about-sub about-version">v1.0.0 · Offline-ready · PWA</p>
           </div>
         </section>
 
-      </DashboardLayout>
-    </MainLayout>
-  );
-}
+        {/* Danger zone */}
+        <section className="settings-section danger-zone">
+          <h2 className="settings-label danger">Danger Zone</h2>
+          <button
+            className={`btn-danger ${confirmReset ? 'confirming' : ''}`}
+            onClick={handleReset}
+          >
+            {confirmReset ? '⚠️ Tap again to confirm reset' : 'Reset Companion'}
+          </button>
+          {confirmReset && (
+            <p className="danger-note">This will erase all data. Cannot be undone.</p>
+          )}
+        </section>
 
-function SettingRow({ label, value }) {
-  return (
-    <div style={styles.settingRow}>
-      <span style={styles.settingLabel}>{label}</span>
-      <span style={styles.settingValue}>{value}</span>
+      </div>
     </div>
   );
 }
-
-function ActionButton({ label, desc, onClick, danger }) {
-  return (
-    <button
-      style={{
-        ...styles.actionBtn,
-        ...(danger ? styles.actionBtnDanger : {}),
-      }}
-      onClick={onClick}
-    >
-      <span style={styles.actionLabel}>{label}</span>
-      <span style={styles.actionDesc}>{desc}</span>
-    </button>
-  );
-}
-
-const styles = {
-  section:      { marginBottom: 'var(--space-6)' },
-  sectionTitle: {
-    fontSize:      'var(--font-size-xs)', fontWeight: 'var(--font-weight-semi)',
-    color:         'var(--color-text-muted)', letterSpacing: 'var(--letter-spacing-wide)',
-    textTransform: 'uppercase', marginBottom: 'var(--space-2)',
-  },
-  settingRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: 'var(--space-2) var(--space-4)',
-    borderBottom: '1px solid var(--color-border-subtle)',
-  },
-  settingLabel: { fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' },
-  settingValue: { fontSize: 'var(--font-size-sm)', color: 'var(--color-text-primary)', fontWeight: 'var(--font-weight-medium)' },
-  actionBtn: {
-    display:       'flex',
-    flexDirection: 'column',
-    alignItems:    'flex-start',
-    gap:           'var(--space-1)',
-    width:         '100%',
-    background:    'var(--color-bg-elevated)',
-    border:        '1px solid var(--color-border-muted)',
-    borderRadius:  'var(--radius-md)',
-    padding:       'var(--space-3) var(--space-4)',
-    cursor:        'pointer',
-    textAlign:     'left',
-    transition:    'border-color var(--transition-base)',
-    fontFamily:    'inherit',
-  },
-  actionBtnDanger: { borderColor: 'rgba(248, 113, 113, 0.3)' },
-  actionLabel: { fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semi)', color: 'var(--color-text-primary)' },
-  actionDesc:  { fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' },
-};
