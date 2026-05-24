@@ -112,6 +112,22 @@ export const DEFAULT_COMPANION_CORE = {
     growthLevel:                  0,    // 0-100 gradual growth
     evolutionHistory:             [],   // adaptation event log (capped 200)
   },
+  // Run 7: embodiment layer — 3D presence persistence
+  embodiment: {
+    visualProfile:        {},    // safe derived appearance descriptors
+    animationState:       'idle',// current animation state label
+    postureState:         'neutral', // sitting|standing|lying|neutral
+    environmentAwareness: {
+      currentScene:     'home',
+      lightingMode:     'soft',
+      interactionZone:  'center',
+    },
+    movementStyle:        {},    // movement tendency descriptors
+    appearanceMemory:     [],    // derived visual trait log (capped 50)
+    soundReactions:       [],    // sound event reaction log (capped 30)
+    idleBehaviourState:   'breathing', // breathing|head_turn|tail_wag|stretch
+    embodimentVersion:    'V1',
+  },
   lastInteraction: null,
 };
 
@@ -261,6 +277,8 @@ export const storage = {
       attachmentGraph: deepMerge(DEFAULT_COMPANION_CORE.attachmentGraph, persisted.attachmentGraph ?? {}),
       // Run 6: evolution layer — deepMerge so all nested keys survive upgrades
       evolutionLayer:  deepMerge(DEFAULT_COMPANION_CORE.evolutionLayer,  persisted.evolutionLayer  ?? {}),
+      // Run 7: embodiment — deepMerge preserves all visual state
+      embodiment:      deepMerge(DEFAULT_COMPANION_CORE.embodiment,      persisted.embodiment      ?? {}),
       lastInteraction: persisted.lastInteraction ?? null,
     };
   },

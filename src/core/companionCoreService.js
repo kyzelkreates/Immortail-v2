@@ -32,6 +32,12 @@ import {
   updateGrowthLevel,
   getEvolutionContext,
 } from './evolutionEngine.js';
+import {
+  updateEmbodimentState,
+  getEmbodimentContext,
+  processMediaAppearance,
+  processSoundReaction,
+} from './embodimentEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -235,6 +241,8 @@ export function initCompanionCore() {
 
   // Run 5: process absence/return before idle check
   const absenceResult = processAbsenceReturn();
+  // Run 7: sync embodiment state on every boot
+  updateEmbodimentState();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -391,6 +399,8 @@ export function recordChatMessage(text) {
     hour:       new Date(now).getHours(),
   });
   updateGrowthLevel();
+  // Run 7: sync embodiment after every chat
+  updateEmbodimentState();
 
   // Legacy compat
   storage.addMemory({
@@ -436,6 +446,15 @@ export function recordMediaEvent(mediaEntry) {
     hour: new Date(now).getHours(),
   });
   updateGrowthLevel();
+  // Run 7: derive safe appearance traits from media metadata
+  if (['image', 'video'].includes(mediaEntry.type)) {
+    processMediaAppearance(mediaEntry);
+  }
+  // Run 7: classify audio for sound reaction
+  if (mediaEntry.type === 'audio') {
+    processSoundReaction({ ...mediaEntry, type: 'audio' });
+  }
+  updateEmbodimentState();
 
   storage.addMemory({
     type:    mediaEntry.type,
@@ -481,6 +500,8 @@ export function recordInteractionEvent(type) {
   // Run 6: record activity signal for learning engine
   recordActivitySignal(type, { hour: new Date(now).getHours() });
   updateGrowthLevel();
+  // Run 7: sync embodiment after every interaction
+  updateEmbodimentState();
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type, ts: now });
   return core;
@@ -578,6 +599,8 @@ export function buildOllamaPrompt(userMessage) {
   const bond         = getBondContext();
   // Run 6: evolution context
   const evo          = getEvolutionContext();
+  // Run 7: embodiment context
+  const emb          = getEmbodimentContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -656,6 +679,25 @@ export function buildOllamaPrompt(userMessage) {
     `EVOLUTION RULES: maintain identityLock. Adapt gently over time. Preserve emotional stability.`,
     `Reference learned preferences naturally. Never simulate dependency or manipulation.`,
     `=== END EVOLUTION STATE ===`,
+    ``,
+    // ── Run 7: Embodiment context ────────────────────────────────
+    `=== EMBODIMENT CONTEXT ===`,
+    `Animation state: ${emb.animationState}.`,
+    `Posture: ${emb.postureState}.`,
+    `Idle behaviour: ${emb.idleBehaviourState}.`,
+    `Environment: scene=${emb.environmentAwareness?.currentScene ?? 'home'}, lighting=${emb.environmentAwareness?.lightingMode ?? 'soft'}.`,
+    ...(Object.keys(emb.visualProfile ?? {}).filter(k => k !== 'updatedAt').length > 0
+      ? [`Visual profile: ${Object.entries(emb.visualProfile)
+          .filter(([k]) => k !== 'updatedAt')
+          .map(([k,v]) => `${k}=${v}`).join(', ')}.`]
+      : []),
+    `Align your tone with the current animation state:`,
+    `  playful/excited → warm and energetic.`,
+    `  resting/idle → calm and gentle.`,
+    `  reunion → joyful and emotionally engaged.`,
+    `  curious/attentive → alert and interested.`,
+    `  waiting → patient, slightly eager.`,
+    `=== END EMBODIMENT CONTEXT ===`,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
     `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
