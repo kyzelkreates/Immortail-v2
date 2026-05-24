@@ -103,6 +103,15 @@ export const DEFAULT_COMPANION_CORE = {
     lastSeen:            null, // timestamp of last session
     bondStage:           'distant', // distant|familiar|trusted|bonded|deeply_bonded
   },
+  // Run 6: evolution layer — safe preference + pattern learning
+  evolutionLayer: {
+    learnedPreferences:           {},   // keyed preference signals
+    recurringPatterns:            {},   // detected behavioural patterns
+    favouriteActivities:          [],   // top-N activity types by frequency
+    communicationStyleAdaptation: {},   // chat style signals
+    growthLevel:                  0,    // 0-100 gradual growth
+    evolutionHistory:             [],   // adaptation event log (capped 200)
+  },
   lastInteraction: null,
 };
 
@@ -250,6 +259,8 @@ export const storage = {
       emotionalState:  deepMerge(DEFAULT_COMPANION_CORE.emotionalState,  persisted.emotionalState  ?? {}),
       // Run 5: attachment graph — deepMerge preserves all accumulated values
       attachmentGraph: deepMerge(DEFAULT_COMPANION_CORE.attachmentGraph, persisted.attachmentGraph ?? {}),
+      // Run 6: evolution layer — deepMerge so all nested keys survive upgrades
+      evolutionLayer:  deepMerge(DEFAULT_COMPANION_CORE.evolutionLayer,  persisted.evolutionLayer  ?? {}),
       lastInteraction: persisted.lastInteraction ?? null,
     };
   },

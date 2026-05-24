@@ -27,6 +27,11 @@ import {
   getBondContext,
   BOND_STAGE,
 } from './bondingEngine.js';
+import {
+  recordActivitySignal,
+  updateGrowthLevel,
+  getEvolutionContext,
+} from './evolutionEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -378,6 +383,14 @@ export function recordChatMessage(text) {
 
   // Run 5: update attachment graph
   updateBondingOnInteraction({ type: 'chat', sentiment, emotionalScore });
+  // Run 6: record activity signal for learning engine
+  recordActivitySignal('chat', {
+    sentiment,
+    emotionalScore,
+    textLength: text.length,
+    hour:       new Date(now).getHours(),
+  });
+  updateGrowthLevel();
 
   // Legacy compat
   storage.addMemory({
@@ -417,6 +430,12 @@ export function recordMediaEvent(mediaEntry) {
 
   // Run 5: media interaction boosts familiarity
   updateBondingOnInteraction({ type: mediaEntry.type, isMedia: true });
+  // Run 6: record media signal for learning engine
+  recordActivitySignal(mediaEntry.type, {
+    isMedia: true,
+    hour: new Date(now).getHours(),
+  });
+  updateGrowthLevel();
 
   storage.addMemory({
     type:    mediaEntry.type,
@@ -459,6 +478,9 @@ export function recordInteractionEvent(type) {
 
   // Run 5: update attachment graph
   updateBondingOnInteraction({ type });
+  // Run 6: record activity signal for learning engine
+  recordActivitySignal(type, { hour: new Date(now).getHours() });
+  updateGrowthLevel();
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type, ts: now });
   return core;
@@ -554,6 +576,8 @@ export function buildOllamaPrompt(userMessage) {
   const traits       = lock?.lockedTraits ?? {};
   // Run 5: attachment graph context
   const bond         = getBondContext();
+  // Run 6: evolution context
+  const evo          = getEvolutionContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -610,6 +634,28 @@ export function buildOllamaPrompt(userMessage) {
     ``,
     `Recent + weighted memory context:`,
     memoryContext,
+    ``,
+    // ── Run 6: Evolution context ────────────────────────────────
+    `=== EVOLUTION STATE ===`,
+    `Growth level: ${evo.growthLevel}/100.`,
+    `Favourite activities: ${evo.favouriteActivities.join(', ') || 'none yet'}.`,
+    ...(Object.keys(evo.learnedPreferences).filter(k => !k.startsWith('freq_')).length > 0
+      ? [`Learned preferences: ${
+            Object.entries(evo.learnedPreferences)
+              .filter(([k]) => !k.startsWith('freq_'))
+              .map(([k,v]) => `${k}=${v}`)
+              .join(', ')}.`]
+      : []),
+    ...(Object.keys(evo.recurringPatterns).filter(k => !k.startsWith('hourBucket_')).length > 0
+      ? [`Recurring patterns: ${
+            Object.entries(evo.recurringPatterns)
+              .filter(([k]) => !k.startsWith('hourBucket_'))
+              .map(([k,v]) => `${k}=${v}`)
+              .join(', ')}.`]
+      : []),
+    `EVOLUTION RULES: maintain identityLock. Adapt gently over time. Preserve emotional stability.`,
+    `Reference learned preferences naturally. Never simulate dependency or manipulation.`,
+    `=== END EVOLUTION STATE ===`,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
     `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
