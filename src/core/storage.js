@@ -320,6 +320,65 @@ export const DEFAULT_COMPANION_CORE = {
     transitionLog:        [],
     worldVersion:         'V1',
   },
+
+  // ── Run 17: AR presence engine ───────────────────────────────────
+  arEngine: {
+    arEnabled:        false,
+    arSessionState:   'inactive',
+    trackingMode:     'off',
+    anchorMode:       'none',
+    surfaceDetection: 'disabled',
+    worldScale:       '1:1',
+    renderMode:       '2d',
+    cameraInput: {
+      active:            false,
+      permissionState:   'idle',
+      frameRate:         'low_power_mode',
+      processingMode:    'on_demand',
+      privacyMode:       'strict',
+      lastActivatedAt:   null,
+      lastDeactivatedAt: null,
+      backgroundAllowed: false,
+      persistFrames:     false,
+    },
+    anchorState: {
+      activeAnchor:   null,
+      anchorPosition: {},
+      anchorSurface:  'unknown',
+      stabilityScore: 0.0,
+      anchorLocked:   false,
+      anchorLog:      [],
+    },
+    worldScaleSystem: {
+      modelScale:           1.0,
+      realWorldScale:       'meters',
+      cameraDepthBias:      0.0,
+      perspectiveCorrection:true,
+      consistentSize:       true,
+      antiDistortion:       true,
+    },
+    snapshotSystem: {
+      enabled:       true,
+      saveFormat:    'local_only',
+      includes:      ['dog','environment','lighting'],
+      privacyLocked: true,
+      snapshots:     [],
+    },
+    mobilePerf: {
+      preset:            'balanced',
+      polygonReduction:  0.25,
+      animationLOD:      'medium',
+      textureCompression:'medium',
+      frameRateCap:      30,
+      shadowsEnabled:    false,
+      postProcessing:    false,
+      batteryWarning:    false,
+      gpuThrottle:       false,
+    },
+    sessionLog:  [],
+    privacyLog:  [],
+    arVersion:   'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -590,6 +649,8 @@ export const storage = {
       memoryReflection:  deepMerge(DEFAULT_COMPANION_CORE.memoryReflection,  persisted.memoryReflection  ?? {}),
       // Run 16: world engine
       worldEngine:       deepMerge(DEFAULT_COMPANION_CORE.worldEngine,       persisted.worldEngine       ?? {}),
+      // Run 17: AR presence engine
+      arEngine:          deepMerge(DEFAULT_COMPANION_CORE.arEngine,          persisted.arEngine          ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },

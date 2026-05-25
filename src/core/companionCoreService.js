@@ -77,6 +77,13 @@ import {
   ENVIRONMENT_PROFILES,
 } from './worldEngine.js';
 import {
+  initArPresenceEngine,
+  getArEngineContext,
+  resetArThrottles,
+  AR_ENGINE_ID,
+  AR_SAFETY,
+} from './arPresenceEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -329,6 +336,8 @@ export function initCompanionCore() {
   initMemoryReflection();
   // Run 16: world engine
   initWorldEngine();
+  // Run 17: AR presence engine
+  initArPresenceEngine();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -711,6 +720,8 @@ export function buildOllamaPrompt(userMessage) {
   const memCtx       = getMemoryReflectionContext();
   // Run 16: world engine context
   const worldCtx     = getWorldEngineContext();
+  // Run 17: AR engine context
+  const arCtx        = getArEngineContext();
   // Derive and apply speech emotion from current core state
   const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
@@ -910,6 +921,22 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== AR PRESENCE CONTEXT ===`,
+    `AR mode: ${arCtx.arSessionState}. Render mode: ${arCtx.renderMode}. Camera: ${arCtx.cameraActive ? 'active' : 'inactive'}.`,
+    `Camera permission: ${arCtx.cameraPermission}. Background allowed: ${arCtx.backgroundAllowed}. Persist frames: ${arCtx.persistFrames}.`,
+    `Tracking mode: ${arCtx.trackingMode}. Anchor: ${arCtx.anchorMode} (surface: ${arCtx.anchorSurface}, stability: ${arCtx.stabilityScore}).`,
+    `World scale: ${arCtx.worldScale}. Mobile perf preset: ${arCtx.mobilePerfPreset}. Frame rate cap: ${arCtx.frameRateCap}fps.`,
+    `Snapshots captured: ${arCtx.snapshotCount} (local-only: ${arCtx.userInitiated}).`,
+    `AR BEHAVIOUR RULES:`,
+    `  AR is user-initiated only — never auto-starts. Privacy mode: ${arCtx.privacyMode}.`,
+    `  Camera only active during explicit AR sessions — no background capture.`,
+    `  Dog model is identical in AR — same rig, same animations, never regenerated.`,
+    `  Head tracking is soft and non-aggressive — no constant stare, no hyper-tracking.`,
+    `  AR overlays the world engine — does not replace internal presence system.`,
+    `  Snapshots are local-only unless user explicitly exports them.`,
+    `  Engine: ${AR_ENGINE_ID}. UserInitiatedOnly: ${AR_SAFETY.userInitiatedOnly}. BackgroundCamera: ${AR_SAFETY.backgroundCamera}.`,
+    `=== END AR PRESENCE CONTEXT ===`,
+    ``,
     `=== WORLD ENGINE CONTEXT ===`,
     `Active environment: ${worldCtx.activeEnvironment} (${worldCtx.environmentLabel}).`,
     `Time of day: ${worldCtx.timeOfDay}. Environment mood: ${worldCtx.environmentMood}.`,
