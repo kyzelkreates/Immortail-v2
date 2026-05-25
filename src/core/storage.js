@@ -238,6 +238,26 @@ export const DEFAULT_COMPANION_CORE = {
     spatialAudioExpanded: false,
     expansionVersion:    'V1',
   },
+
+  // ── Run 14: voice presence engine ─────────────────────────────
+  voicePresence: {
+    voiceEnabled:        true,
+    listeningState:      'inactive',
+    speakingState:       'idle',
+    activeVoiceProfile:  'warm_calm',
+    speechEmotionState:  'neutral',
+    interruptionState:   'stable',
+    ambientVoiceMode:    'soft',
+    ttsProvider:         'piper',
+    sttProvider:         'whisper',
+    streamingEnabled:    true,
+    offlineFallback:     true,
+    lastSpeechAt:        null,
+    lastListenAt:        null,
+    ambientSoundHistory: [],
+    voiceMemoryCount:    0,
+    voiceVersion:        'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -502,6 +522,8 @@ export const storage = {
       animationSystem:   deepMerge(DEFAULT_COMPANION_CORE.animationSystem,   persisted.animationSystem   ?? {}),
       // Run 10: persistence hardening layer
       persistenceLayer: deepMerge(DEFAULT_COMPANION_CORE.persistenceLayer, persisted.persistenceLayer ?? {}),
+      // Run 14: voice presence engine
+      voicePresence:     deepMerge(DEFAULT_COMPANION_CORE.voicePresence,     persisted.voicePresence     ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },

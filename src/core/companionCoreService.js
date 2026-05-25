@@ -54,6 +54,15 @@ import {
   captureSessionState,
 } from './persistenceEngine.js';
 import {
+  initVoicePresence,
+  deriveSpeechEmotion,
+  getVoiceConversationContext,
+  getVoiceOrchestrationContext,
+  resetVoiceThrottles,
+  VOICE_ENGINE_ID,
+  VOICE_SAFETY_CONSTANTS,
+} from './voicePresenceEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -300,6 +309,8 @@ export function initCompanionCore() {
   initHybridAIOrchestrator();
   // Run 13: real-time presence system
   initPresenceSystem();
+  // Run 14: voice presence engine
+  initVoicePresence();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -676,6 +687,10 @@ export function buildOllamaPrompt(userMessage) {
   const embExp       = getEmbodimentExpansionContext();
   // Run 12: hybrid AI orchestration context
   const hybrid       = getHybridAIContext();
+  // Run 14: voice presence + speech emotion context
+  const voiceCtx     = getVoiceConversationContext();
+  // Derive and apply speech emotion from current core state
+  const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
   const presence     = getPresenceConversationContext();
   const animCont     = getAnimationContinuityContext();
@@ -873,6 +888,24 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== VOICE CONTEXT ===`,
+    `Speech emotion: ${voiceCtx.speechEmotionState}. Voice profile: ${voiceCtx.activeVoiceProfile}.`,
+    `Ambient mood: ${voiceCtx.ambientMood}. Current routine: ${voiceCtx.activeRoutine}.`,
+    `Posture: ${voiceCtx.currentPosture}. Environment: ${voiceCtx.environment}.`,
+    `Speech pacing: ${voiceCtx.speechPacing}x. Cadence: ${voiceCtx.speechCadence}. Warmth: ${voiceCtx.speechWarmth}.`,
+    `Listening state: ${voiceCtx.listeningState}. Speaking state: ${voiceCtx.speakingState}.`,
+    `TTS: ${voiceCtx.ttsProvider} (offline-capable). STT: ${voiceCtx.sttProvider} (offline-capable).`,
+    ...(voiceCtx.attentionState ? [`Attention: ${voiceCtx.attentionState}.`] : []),
+    `VOICE DELIVERY RULES:`,
+    `  Match speech pacing to speechEmotionState — sleepy = shorter softer responses.`,
+    `  Reunion state = warm gentle excitement. Playful = lighter energetic phrasing.`,
+    `  Never exaggerate emotion in text — modulation is handled by TTS layer.`,
+    `  Maintain emotional continuity — voice must feel like same companion always.`,
+    `  Bond stage (${voiceCtx.bondStage}) shapes warmth intensity — deeply_bonded = warmest tone.`,
+    `  All voice features degrade safely offline — never require cloud.`,
+    `Engine: ${VOICE_ENGINE_ID}. HumanCloning: ${VOICE_SAFETY_CONSTANTS.humanCloning}. CloudRequired: ${VOICE_SAFETY_CONSTANTS.cloudRequired}.`,
+    `=== END VOICE CONTEXT ===`,
+    ``,
     `=== CONTINUITY CONTEXT ===`,
     `Persistence health: ${persist.persistenceHealth}.`,
     `Current relationship phase: ${persist.currentPhase}.`,
