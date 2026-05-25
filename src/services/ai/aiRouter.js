@@ -25,7 +25,7 @@ import { normalizeResponse, validateContent, extractEmotionHint } from './respon
 import { recordUserTurn, recordAssistantTurn } from './memoryEngine.js';
 import { applyEmotionNudge, progressAttachment } from './personalityEngine.js';
 import { getCatalogueEntry, PROVIDER_TYPES } from './modelProfiles.js';
-import { blockGroqMutation } from '../../../src/core/legacyEngine.js';
+import { blockGroqMutation } from '../../core/legacyEngine.js';
 
 // Adapters
 import * as ollamaAdapter     from './providerAdapters/ollamaAdapter.js';

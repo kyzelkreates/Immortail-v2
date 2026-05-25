@@ -364,6 +364,8 @@ export function initCompanionCore() {
   initProductionOptimisationEngine();
   // Run 20: legacy preservation + Generation 1 completion lock
   bootLegacyEngine();
+  // Generation 2: AI provider registry + worker boot
+  _bootGen2Systems();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -393,6 +395,38 @@ export function initCompanionCore() {
  * Repairs what it can; never reinitialises randomly.
  * Returns { ok, repairs[] }
  */
+// ================================================================
+// GENERATION 2 BOOT — AI Layer + Worker System
+// Runs after all Gen1 systems. Never overwrites Gen1 state.
+// ================================================================
+
+function _bootGen2Systems() {
+  // All dynamic imports run async after Gen1 boot completes
+  // Wrapped in setTimeout(0) to avoid blocking the synchronous boot sequence
+  setTimeout(() => {
+    // 1. Provider registry
+    import('../services/ai/providerRegistry.js')
+      .then(m => { m.bootProviderRegistry(); })
+      .catch(e => console.warn('[GEN2] providerRegistry boot failed:', e.message));
+
+    // 2. Workers — boot sequentially after orchestrator is ready
+    import('../workers/orchestrator.js').then(() =>
+      Promise.all([
+        import('../workers/memoryWorker.js').then(m => m.boot()),
+        import('../workers/emotionWorker.js').then(m => m.boot()),
+        import('../workers/voiceWorker.js').then(m => m.boot()),
+        import('../workers/animationWorker.js').then(m => m.boot()),
+        import('../workers/companionWorker.js').then(m => m.boot()),
+        import('../workers/safetyWorker.js').then(m => m.boot()),
+        import('../workers/contextWorker.js').then(m => m.boot()),
+      ])
+    ).catch(e => console.warn('[GEN2] worker boot failed:', e.message));
+
+    console.log('[IMMORTAIL GEN2] AI layer + workers booting asynchronously');
+  }, 0);
+}
+
+
 export function crossSessionConsistencyCheck() {
   const repairs = [];
 

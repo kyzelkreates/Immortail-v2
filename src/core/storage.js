@@ -970,7 +970,6 @@ export const storage = {
       return false;
     }
   },
-};
 
   // ══════════════════════════════════════════════════════════════════
   // GENERATION 2 — AI LAYER ACCESSORS
@@ -1039,6 +1038,6 @@ export const storage = {
     const d = storage.getDashboard();
     return write(KEYS.AI_DASHBOARD, { ...d, ...patch });
   },
-
+};
 
 export default storage;
