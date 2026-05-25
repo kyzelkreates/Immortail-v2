@@ -147,6 +147,22 @@ export const DEFAULT_COMPANION_CORE = {
     ambientMood:                 'calm',  // calm|playful|sleepy|curious|relaxed|attentive
     lastAutonomousTransition:    null,    // timestamp
   },
+  // Run 9: life story — long-term memory + narrative continuity
+  lifeStory: {
+    milestones:            [],
+    memoryChapters:        [],
+    compressedMemoryIndex: [],
+    importantEvents:       [],
+    relationshipTimeline:  [],
+    longTermSummary:       {
+      totalInteractions:    0,
+      strongestBondPeriods: [],
+      favouriteActivities:  [],
+      emotionalPatterns:    {},
+      importantMemories:    [],
+    },
+    lifeStoryVersion:      'V1',
+  },
   lastInteraction: null,
 };
 
@@ -300,6 +316,8 @@ export const storage = {
       embodiment:      deepMerge(DEFAULT_COMPANION_CORE.embodiment,      persisted.embodiment      ?? {}),
       // Run 8: life simulation — deepMerge preserves all routine/mood state
       lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
+      // Run 9: life story — deepMerge preserves all narrative state
+      lifeStory:       deepMerge(DEFAULT_COMPANION_CORE.lifeStory,       persisted.lifeStory       ?? {}),
       lastInteraction: persisted.lastInteraction ?? null,
     };
   },
