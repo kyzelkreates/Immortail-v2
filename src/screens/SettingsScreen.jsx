@@ -2,21 +2,149 @@
 // IMMORTAIL™ — SETTINGS SCREEN
 // Tabs: Companion · AI Providers · Media Inputs · System
 // All state reads/writes through storage.js SSOT.
-// NO conditional filtering of Ollama or any provider.
+// Providers: Ollama · Groq · OpenAI · LM Studio · LocalAI
+//            Mistral · HuggingFace · OpenRouter · Anthropic
 // ================================================================
 
 import React, { useState } from 'react';
-import useDog       from "../hooks/useDog.js";
-import useCompanionCore from "../hooks/useCompanionCore.js";
-import useConfig    from '../hooks/useConfig.js';
-import storage      from '../core/storage.js';
+import useDog            from '../hooks/useDog.js';
+import useCompanionCore  from '../hooks/useCompanionCore.js';
+import useConfig         from '../hooks/useConfig.js';
+import storage           from '../core/storage.js';
 
 const TABS = [
-  { id: 'companion', label: '🐾 Companion' },
+  { id: 'companion', label: '🐾 Companion'   },
   { id: 'providers', label: '🤖 AI Providers' },
-  { id: 'media',     label: '📷 Media' },
-  { id: 'system',    label: '⚙️ System' },
+  { id: 'media',     label: '📷 Media'        },
+  { id: 'system',    label: '⚙️ System'        },
 ];
+
+// ── Full provider catalogue ────────────────────────────────────
+const PROVIDER_CATALOGUE = [
+  {
+    id:       'ollama',
+    icon:     '🦙',
+    name:     'Ollama',
+    desc:     'Local LLM · runs entirely on-device',
+    type:     'local',
+    fields: [
+      { key: 'baseUrl', label: 'Base URL',  placeholder: 'http://localhost:11434', type: 'text'     },
+      { key: 'model',   label: 'Model',     placeholder: 'llama3',                 type: 'text'     },
+    ],
+    badge:    'LOCAL',
+  },
+  {
+    id:       'groq',
+    icon:     '⚡',
+    name:     'Groq',
+    desc:     'Ultra-fast cloud inference · Llama · Mixtral · Gemma',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key', placeholder: 'gsk_…',          type: 'password' },
+      { key: 'model',  label: 'Model',   placeholder: 'llama3-8b-8192', type: 'text'     },
+    ],
+    badge:    'FAST',
+    docsUrl:  'https://console.groq.com/keys',
+  },
+  {
+    id:       'lmstudio',
+    icon:     '🖥️',
+    name:     'LM Studio',
+    desc:     'Local server · OpenAI-compatible API',
+    type:     'local',
+    fields: [
+      { key: 'baseUrl', label: 'Base URL', placeholder: 'http://localhost:1234/v1', type: 'text' },
+      { key: 'model',   label: 'Model',    placeholder: 'local-model',              type: 'text' },
+    ],
+    badge:    'LOCAL',
+  },
+  {
+    id:       'localai',
+    icon:     '🏠',
+    name:     'LocalAI',
+    desc:     'Self-hosted · OpenAI-compatible · any GGUF model',
+    type:     'local',
+    fields: [
+      { key: 'baseUrl', label: 'Base URL', placeholder: 'http://localhost:8080/v1', type: 'text' },
+      { key: 'model',   label: 'Model',    placeholder: 'gpt-3.5-turbo',            type: 'text' },
+    ],
+    badge:    'LOCAL',
+  },
+  {
+    id:       'openrouter',
+    icon:     '🔀',
+    name:     'OpenRouter',
+    desc:     'Route to 100+ models · Llama · Mistral · Claude · free tiers',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key', placeholder: 'sk-or-…',                            type: 'password' },
+      { key: 'model',  label: 'Model',   placeholder: 'meta-llama/llama-3-8b-instruct:free', type: 'text'     },
+    ],
+    badge:    'MULTI',
+    docsUrl:  'https://openrouter.ai/keys',
+  },
+  {
+    id:       'huggingface',
+    icon:     '🤗',
+    name:     'HuggingFace',
+    desc:     'Inference API · thousands of open-source models',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key (HF Token)', placeholder: 'hf_…',                                type: 'password' },
+      { key: 'model',  label: 'Model',               placeholder: 'mistralai/Mistral-7B-Instruct-v0.2', type: 'text'     },
+    ],
+    badge:    'OPEN',
+    docsUrl:  'https://huggingface.co/settings/tokens',
+  },
+  {
+    id:       'mistral',
+    icon:     '🌬️',
+    name:     'Mistral AI',
+    desc:     'Mistral · Mixtral · Codestral cloud API',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key', placeholder: '…',              type: 'password' },
+      { key: 'model',  label: 'Model',   placeholder: 'mistral-small', type: 'text'     },
+    ],
+    badge:    'OPEN',
+    docsUrl:  'https://console.mistral.ai/api-keys/',
+  },
+  {
+    id:       'anthropic',
+    icon:     '🔬',
+    name:     'Anthropic',
+    desc:     'Claude 3 series · strong reasoning',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key', placeholder: 'sk-ant-…',          type: 'password' },
+      { key: 'model',  label: 'Model',   placeholder: 'claude-3-haiku-20240307', type: 'text' },
+    ],
+    badge:    'CLOUD',
+    docsUrl:  'https://console.anthropic.com/settings/keys',
+  },
+  {
+    id:       'openai',
+    icon:     '🧠',
+    name:     'OpenAI',
+    desc:     'GPT-4o · GPT-4 · cloud API',
+    type:     'cloud',
+    fields: [
+      { key: 'apiKey', label: 'API Key', placeholder: 'sk-…',    type: 'password' },
+      { key: 'model',  label: 'Model',   placeholder: 'gpt-4o', type: 'text'     },
+    ],
+    badge:    'CLOUD',
+    docsUrl:  'https://platform.openai.com/api-keys',
+  },
+];
+
+// ── Badge colour map ───────────────────────────────────────────
+const BADGE_STYLE = {
+  LOCAL: { background: '#1a3a2a', color: '#4ade80', border: '1px solid #4ade8044' },
+  FAST:  { background: '#2a1a3a', color: '#a78bfa', border: '1px solid #a78bfa44' },
+  OPEN:  { background: '#1a2a3a', color: '#60a5fa', border: '1px solid #60a5fa44' },
+  MULTI: { background: '#2a2a1a', color: '#fbbf24', border: '1px solid #fbbf2444' },
+  CLOUD: { background: '#2a1a1a', color: '#f87171', border: '1px solid #f8717144' },
+};
 
 export default function SettingsScreen() {
   const { dog, changeName, reset } = useDog();
@@ -51,12 +179,9 @@ export default function SettingsScreen() {
   }
 
   // ── Toggle helpers ─────────────────────────────────────────────
-
-  const toggleFeature  = (key)  => patch(`features.${key}`,           !features[key]);
-  const toggleProvider = (name) => patch(`providers.${name}.enabled`,  !providers[name]?.enabled);
-
-  const setOllamaUrl = (url) => patch('providers.ollama.baseUrl', url);
-  const setOllamaModel = (m) => patch('providers.ollama.model', m);
+  const toggleFeature  = (key)  => patch(`features.${key}`, !features[key]);
+  const toggleProvider = (id)   => patch(`providers.${id}.enabled`, !providers[id]?.enabled);
+  const setField       = (id, key, val) => patch(`providers.${id}.${key}`, val);
 
   return (
     <div className="screen settings-screen">
@@ -136,94 +261,97 @@ export default function SettingsScreen() {
         {activeTab === 'providers' && (
           <>
             <p className="tab-description">
-              AI providers power conversation and behaviour. Toggle and configure each provider below.
+              Configure the AI providers that power your companion's brain. Local providers keep
+              everything on-device. Cloud providers need an API key but offer faster responses.
             </p>
 
-            {/* Ollama — always shown, no conditional filter */}
-            <section className="settings-section">
-              <div className="provider-card">
-                <div className="provider-header">
-                  <div className="provider-info">
-                    <span className="provider-icon">🦙</span>
-                    <div>
-                      <p className="provider-name">Ollama</p>
-                      <p className="provider-desc">Local LLM · runs on your device</p>
-                    </div>
-                  </div>
-                  <button
-                    className={'toggle-btn' + (providers.ollama?.enabled ? ' on' : '')}
-                    onClick={() => toggleProvider('ollama')}
-                    aria-label="Toggle Ollama"
-                  >
-                    {providers.ollama?.enabled ? 'ON' : 'OFF'}
-                  </button>
-                </div>
+            {/* Legend */}
+            <div className="provider-legend">
+              {Object.entries(BADGE_STYLE).map(([badge, style]) => (
+                <span key={badge} className="provider-badge" style={style}>{badge}</span>
+              ))}
+            </div>
 
-                {providers.ollama?.enabled && (
-                  <div className="provider-config">
-                    <label className="config-label">Base URL</label>
-                    <input
-                      className="name-input"
-                      value={providers.ollama?.baseUrl ?? 'http://localhost:11434'}
-                      onChange={e => setOllamaUrl(e.target.value)}
-                      placeholder="http://localhost:11434"
-                    />
-                    <label className="config-label" style={{marginTop:8}}>Model</label>
-                    <input
-                      className="name-input"
-                      value={providers.ollama?.model ?? 'llama3'}
-                      onChange={e => setOllamaModel(e.target.value)}
-                      placeholder="llama3"
-                    />
-                    <div className="provider-status">
-                      <span className="status-dot active" />
-                      <span>Status: {providers.ollama?.status ?? 'active'}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
+            {PROVIDER_CATALOGUE.map(prov => {
+              const cfg     = providers[prov.id] ?? {};
+              const enabled = !!cfg.enabled;
 
-            {/* OpenAI */}
-            <section className="settings-section">
-              <div className="provider-card">
-                <div className="provider-header">
-                  <div className="provider-info">
-                    <span className="provider-icon">🧠</span>
-                    <div>
-                      <p className="provider-name">OpenAI</p>
-                      <p className="provider-desc">Cloud LLM · requires API key</p>
+              return (
+                <section className="settings-section" key={prov.id}>
+                  <div className="provider-card">
+
+                    {/* Header row */}
+                    <div className="provider-header">
+                      <div className="provider-info">
+                        <span className="provider-icon">{prov.icon}</span>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <p className="provider-name">{prov.name}</p>
+                            <span
+                              className="provider-badge"
+                              style={BADGE_STYLE[prov.badge] ?? {}}
+                            >
+                              {prov.badge}
+                            </span>
+                          </div>
+                          <p className="provider-desc">{prov.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        className={'toggle-btn' + (enabled ? ' on' : '')}
+                        onClick={() => toggleProvider(prov.id)}
+                        aria-label={`Toggle ${prov.name}`}
+                      >
+                        {enabled ? 'ON' : 'OFF'}
+                      </button>
                     </div>
+
+                    {/* Expanded config when enabled */}
+                    {enabled && (
+                      <div className="provider-config">
+                        {prov.fields.map(field => (
+                          <React.Fragment key={field.key}>
+                            <label className="config-label">{field.label}</label>
+                            <input
+                              className="name-input"
+                              type={field.type}
+                              value={cfg[field.key] ?? ''}
+                              onChange={e => setField(prov.id, field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                            />
+                          </React.Fragment>
+                        ))}
+
+                        {/* Docs link for cloud providers */}
+                        {prov.docsUrl && (
+                          <a
+                            href={prov.docsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="provider-docs-link"
+                          >
+                            🔗 Get API key →
+                          </a>
+                        )}
+
+                        <div className="provider-status" style={{ marginTop: 10 }}>
+                          <span className={'status-dot' + (enabled ? ' active' : '')} />
+                          <span>Status: {cfg.status ?? (enabled ? 'configured' : 'disabled')}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    className={'toggle-btn' + (providers.openai?.enabled ? ' on' : '')}
-                    onClick={() => toggleProvider('openai')}
-                    aria-label="Toggle OpenAI"
-                  >
-                    {providers.openai?.enabled ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-                {providers.openai?.enabled && (
-                  <div className="provider-config">
-                    <label className="config-label">API Key</label>
-                    <input
-                      className="name-input"
-                      type="password"
-                      value={providers.openai?.apiKey ?? ''}
-                      onChange={e => patch('providers.openai.apiKey', e.target.value)}
-                      placeholder="sk-…"
-                    />
-                    <label className="config-label" style={{marginTop:8}}>Model</label>
-                    <input
-                      className="name-input"
-                      value={providers.openai?.model ?? 'gpt-4o'}
-                      onChange={e => patch('providers.openai.model', e.target.value)}
-                      placeholder="gpt-4o"
-                    />
-                  </div>
-                )}
-              </div>
-            </section>
+                </section>
+              );
+            })}
+
+            <p className="tab-note">
+              💡 The companion uses Ollama as its persistent brain. Groq and other providers handle
+              fast multimodal tasks. All providers fall back gracefully if offline.
+            </p>
           </>
         )}
 
@@ -236,9 +364,9 @@ export default function SettingsScreen() {
 
             {[
               { key: 'mediaInput',  label: 'Media Input System', desc: 'Master switch for all media' },
-              { key: 'imageInput',  label: 'Image / Camera',     desc: 'Capture photos from camera' },
-              { key: 'audioInput',  label: 'Audio Recording',    desc: 'Record voice and audio' },
-              { key: 'videoInput',  label: 'Video Upload',       desc: 'Upload video files' },
+              { key: 'imageInput',  label: 'Image / Camera',     desc: 'Capture photos from camera'  },
+              { key: 'audioInput',  label: 'Audio Recording',    desc: 'Record voice and audio'       },
+              { key: 'videoInput',  label: 'Video Upload',       desc: 'Upload video files'           },
             ].map(item => (
               <section className="settings-section" key={item.key}>
                 <div className="feature-row">
@@ -249,7 +377,6 @@ export default function SettingsScreen() {
                   <button
                     className={'toggle-btn' + (features[item.key] ? ' on' : '')}
                     onClick={() => toggleFeature(item.key)}
-                    aria-label={`Toggle ${item.label}`}
                   >
                     {features[item.key] ? 'ON' : 'OFF'}
                   </button>
@@ -262,47 +389,44 @@ export default function SettingsScreen() {
         {/* ── SYSTEM TAB ────────────────────────────────────────── */}
         {activeTab === 'system' && (
           <>
-            <section className="settings-section">
-              <h2 className="settings-label">Routing</h2>
-              <div className="system-row">
-                <span className="system-key">Home URL</span>
-                <span className="system-val">{appConfig.homeUrl || '/'}</span>
-              </div>
-              <div className="system-row">
-                <span className="system-key">Home route</span>
-                <span className="system-val">{routes.home || '/'}</span>
-              </div>
-              <div className="system-row">
-                <span className="system-key">Memory route</span>
-                <span className="system-val">{routes.memory || '/memory'}</span>
-              </div>
-              <div className="system-row">
-                <span className="system-key">Settings route</span>
-                <span className="system-val">{routes.settings || '/settings'}</span>
-              </div>
-            </section>
+            <p className="tab-description">
+              Runtime information and system configuration.
+            </p>
 
             <section className="settings-section">
-              <h2 className="settings-label">About</h2>
-              <div className="about-card">
-                <p><strong>IMMORTAIL™</strong></p>
-                <p className="about-sub">Local-first companion. All data stays on your device.</p>
-                <p className="about-sub about-version">
-                  v{appConfig.version ?? '1.0.0'} · Offline-ready · PWA
-                </p>
-              </div>
-            </section>
-
-            <section className="settings-section">
-              <h2 className="settings-label">Feature Flags</h2>
-              {Object.entries(features).map(([k, v]) => (
-                <div className="system-row" key={k}>
-                  <span className="system-key">{k}</span>
-                  <span className={'system-val flag-' + (v ? 'on' : 'off')}>
-                    {v ? '✓ enabled' : '✗ disabled'}
-                  </span>
+              <h2 className="settings-label">Routes</h2>
+              <div className="system-info">
+                <div className="system-row">
+                  <span className="system-key">Home</span>
+                  <span className="system-val">{appConfig.homeUrl || '/'}</span>
                 </div>
-              ))}
+                <div className="system-row">
+                  <span className="system-key">Memory</span>
+                  <span className="system-val">{routes.memory || '/memory'}</span>
+                </div>
+                <div className="system-row">
+                  <span className="system-key">Settings</span>
+                  <span className="system-val">{routes.settings || '/settings'}</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <h2 className="settings-label">Build</h2>
+              <div className="system-info">
+                <div className="system-row">
+                  <span className="system-key">Version</span>
+                  <span className="system-val">v{appConfig.version ?? '1.0.0'}</span>
+                </div>
+                <div className="system-row">
+                  <span className="system-key">Mode</span>
+                  <span className="system-val">Offline-ready · PWA</span>
+                </div>
+                <div className="system-row">
+                  <span className="system-key">Architecture</span>
+                  <span className="system-val">IMMORTAIL™ SSOT v34</span>
+                </div>
+              </div>
             </section>
           </>
         )}
