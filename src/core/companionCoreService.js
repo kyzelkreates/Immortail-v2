@@ -54,6 +54,13 @@ import {
   captureSessionState,
 } from './persistenceEngine.js';
 import {
+  initHybridAIOrchestrator,
+  getHybridAIContext,
+  getEmbodimentProfile,
+  getAllEnvironmentProfiles,
+  PROVIDER, ORCH_STATE,
+} from './hybridAIOrchestrator.js';
+import {
   initEmbodimentExpansion,
   getEmbodimentExpansionContext,
   selectBehaviour,
@@ -282,6 +289,8 @@ export function initCompanionCore() {
   // Run 11: embodiment expansion — environment, needs, animation, posture
   initEmbodimentExpansion();
   captureEmbodimentSession();
+  // Run 12: hybrid AI orchestrator — Ollama + Groq provider registration
+  initHybridAIOrchestrator();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -656,6 +665,8 @@ export function buildOllamaPrompt(userMessage) {
   const persist      = getPersistenceContext();
   // Run 11: embodiment expansion context
   const embExp       = getEmbodimentExpansionContext();
+  // Run 12: hybrid AI orchestration context
+  const hybrid       = getHybridAIContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -770,6 +781,24 @@ export function buildOllamaPrompt(userMessage) {
     `  If interacting with an object → acknowledge the activity naturally.`,
     `  Maintain emotional continuity with the physical state at all times.`,
     `=== END ENVIRONMENT CONTEXT ===`,
+    ``,
+    // ── Run 12: Hybrid AI context ─────────────────────────────────
+    `=== HYBRID AI CONTEXT ===`,
+    `Ollama: ${hybrid.providers.ollama.status} (primary persistent brain — offline-critical).`,
+    `Groq: ${hybrid.providers.groq.status} (multimodal acceleration — fallback to Ollama if unavailable).`,
+    `Orchestration state: ${hybrid.orchestrationState}.`,
+    ...(hybrid.embodimentProfile.traitVersion > 0 ? [
+      `Embodiment profile: v${hybrid.embodimentProfile.traitVersion} — ${Object.keys(hybrid.embodimentProfile.appearanceTraits).length} appearance traits, ${Object.keys(hybrid.embodimentProfile.motionTraits).length} motion traits.`,
+      ...(hybrid.embodimentProfile.appearanceTraits.primaryColour ? [`Primary colour: ${hybrid.embodimentProfile.appearanceTraits.primaryColour}.`] : []),
+      ...(hybrid.embodimentProfile.motionTraits.emotionalMovementTone ? [`Movement tone: ${hybrid.embodimentProfile.motionTraits.emotionalMovementTone}.`] : []),
+    ] : ['Embodiment profile: not yet built — no media uploaded.']),
+    `Environment profile: ${hybrid.activeScene} — ambience: ${hybrid.environmentProfile?.ambience}, tone: ${hybrid.environmentProfile?.emotionalTone}.`,
+    `HYBRID AI RULES:`,
+    `  All persistent memory and emotional continuity are handled by you (Ollama).`,
+    `  Groq handles only rapid media analysis — you validate and integrate results.`,
+    `  Never hallucinate embodiment traits — only use confirmed uploaded media data.`,
+    `  Maintain identity continuity across all provider switching events.`,
+    `=== END HYBRID AI CONTEXT ===`,
     ``,
     // ── Run 8: Life simulation context ──────────────────────────
     `=== LIFE SIMULATION CONTEXT ===`,

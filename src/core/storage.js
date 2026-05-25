@@ -35,10 +35,25 @@ export const DEFAULT_CONFIG = {
       status:   'inactive',
     },
     ollama: {
-      enabled:  true,
-      baseUrl:  'http://localhost:11434',
-      model:    'llama3',
-      status:   'active',
+      enabled:             true,
+      baseUrl:             'http://localhost:11434',
+      model:               'llama3',
+      status:              'active',
+      role:                'primary_persistent_brain',
+      multimodalEnabled:   true,
+      persistencePriority: true,
+      offlineCritical:     true,
+    },
+    groq: {
+      enabled:              false,
+      apiKey:               '',
+      model:                'meta-llama/llama-4-scout-17b-16e-instruct',
+      visionModel:          'meta-llama/llama-4-scout-17b-16e-instruct',
+      status:               'inactive',
+      role:                 'multimodal_acceleration_layer',
+      orchestrationEnabled: true,
+      multimodalSupport:    true,
+      fallbackToOllama:     true,
     },
   },
   routes: {
@@ -163,6 +178,40 @@ export const DEFAULT_COMPANION_CORE = {
     },
     lifeStoryVersion:      'V1',
   },
+  // Run 12: hybrid AI orchestration
+  aiOrchestration: {
+    activeProviders:      [],
+    activeAgents:         [],
+    routingEngine:        {},
+    mediaProcessingQueue: [],
+    embodimentPipeline:   {},
+    orchestrationState:   'stable',
+    orchestrationVersion: 'V1',
+    providerStatus: {
+      ollama: 'unknown',
+      groq:   'unknown',
+    },
+    lastFallbackAt: null,
+    fallbackLog:    [],
+    validationLog:  [],
+    agentRegistry:  {},
+  },
+  // Run 12: persistent embodiment profile
+  embodimentProfile: {
+    appearanceTraits:          {},
+    motionTraits:              {},
+    emotionalMovementTraits:   {},
+    postureTraits:             {},
+    favouriteBehaviours:       {},
+    environmentPreferences:    {},
+    audioProfile:              {},
+    embodimentConsistencyHash: '',
+    traitVersion:              0,
+    lastUpdated:               null,
+    profileVersion:            'V1',
+  },
+  // Run 12: media library
+  mediaLibrary: [],
   // Run 11: environment system
   environmentSystem: {
     activeScene:         'living_room',
@@ -375,6 +424,10 @@ export const storage = {
       lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
       // Run 9: life story — deepMerge preserves all narrative state
       lifeStory:        deepMerge(DEFAULT_COMPANION_CORE.lifeStory,        persisted.lifeStory        ?? {}),
+      // Run 12: AI orchestration + embodiment profile + media library
+      aiOrchestration:   deepMerge(DEFAULT_COMPANION_CORE.aiOrchestration,   persisted.aiOrchestration   ?? {}),
+      embodimentProfile: deepMerge(DEFAULT_COMPANION_CORE.embodimentProfile, persisted.embodimentProfile ?? {}),
+      mediaLibrary:      persisted.mediaLibrary ?? [],
       // Run 11: environment system
       environmentSystem: deepMerge(DEFAULT_COMPANION_CORE.environmentSystem, persisted.environmentSystem ?? {}),
       // Run 11: needs state
