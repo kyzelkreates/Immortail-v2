@@ -21,6 +21,12 @@ export const KEYS = {
   AI_REQUEST_LOG: PREFIX + 'ai_request_log',    // G2: request/response log
   AI_WORKER_STATE:PREFIX + 'ai_worker_state',   // G2: worker coordination state
   AI_DASHBOARD:   PREFIX + 'ai_dashboard',      // G2: dashboard preferences
+  // Run 21 — Voice Intelligence
+  VOICE_SETTINGS:    PREFIX + 'voice_settings',
+  VOICE_MEMORIES:    PREFIX + 'voice_memories',
+  VOICE_TRANSCRIPTS: PREFIX + 'voice_transcripts',
+  VOICE_SESSION:     PREFIX + 'voice_session',
+  VOICE_EMOTION:     PREFIX + 'voice_emotion',
 };
 
 // ── Default system config ─────────────────────────────────────────
@@ -1037,6 +1043,36 @@ export const storage = {
   patchDashboard:  (patch) => {
     const d = storage.getDashboard();
     return write(KEYS.AI_DASHBOARD, { ...d, ...patch });
+  },
+
+  // ── Run 21: Voice Intelligence ───────────────────────────────────
+  getVoiceSettings:      ()      => read(KEYS.VOICE_SETTINGS)    ?? {},
+  saveVoiceSettings:     (s)     => write(KEYS.VOICE_SETTINGS, s),
+  patchVoiceSettings:    (patch) => {
+    const s = storage.getVoiceSettings();
+    return write(KEYS.VOICE_SETTINGS, { ...s, ...patch, updatedAt: Date.now() });
+  },
+  getVoiceMemories:      ()      => read(KEYS.VOICE_MEMORIES)    ?? [],
+  appendVoiceMemory:     (mem)   => {
+    const list = (read(KEYS.VOICE_MEMORIES) ?? []).slice(-499);
+    return write(KEYS.VOICE_MEMORIES, [...list, { ...mem, id: `vm_${Date.now()}`, ts: Date.now() }]);
+  },
+  getVoiceTranscripts:   ()      => read(KEYS.VOICE_TRANSCRIPTS) ?? [],
+  appendVoiceTranscript: (t)     => {
+    const list = (read(KEYS.VOICE_TRANSCRIPTS) ?? []).slice(-999);
+    return write(KEYS.VOICE_TRANSCRIPTS, [...list, { ...t, id: `vt_${Date.now()}`, ts: Date.now() }]);
+  },
+  clearVoiceTranscripts: ()      => write(KEYS.VOICE_TRANSCRIPTS, []),
+  getVoiceSession:       ()      => read(KEYS.VOICE_SESSION)     ?? {},
+  saveVoiceSession:      (s)     => write(KEYS.VOICE_SESSION, s),
+  patchVoiceSession:     (patch) => {
+    const s = storage.getVoiceSession();
+    return write(KEYS.VOICE_SESSION, { ...s, ...patch, updatedAt: Date.now() });
+  },
+  getVoiceEmotion:       ()      => read(KEYS.VOICE_EMOTION)     ?? [],
+  appendVoiceEmotion:    (e)     => {
+    const list = (read(KEYS.VOICE_EMOTION) ?? []).slice(-199);
+    return write(KEYS.VOICE_EMOTION, [...list, { ...e, ts: Date.now() }]);
   },
 };
 

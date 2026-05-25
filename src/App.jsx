@@ -6,6 +6,7 @@ import MediaScreen     from './screens/MediaScreen.jsx';
 import SettingsScreen  from './screens/SettingsScreen.jsx';
 import AISettingsPage  from './pages/AISettingsPage.jsx';
 import AIDashboard     from './pages/AIDashboard.jsx';
+import VoiceCompanionPage from './pages/VoiceCompanionPage.jsx';
 import NavBar          from './components/NavBar.jsx';
 import { EventBus, EVENTS } from './core/eventBus.js';
 
@@ -15,8 +16,9 @@ const SCREENS = {
   memory:      MemoryScreen,
   media:       MediaScreen,
   settings:    SettingsScreen,
-  ai_settings: AISettingsPage,
-  ai_dashboard: AIDashboard,
+  ai_settings:  AISettingsPage,
+  ai_dashboard:  AIDashboard,
+  voice:         VoiceCompanionPage,
 };
 
 export default function App({ bootResult }) {

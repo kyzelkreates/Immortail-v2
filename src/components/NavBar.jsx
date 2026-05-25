@@ -6,6 +6,7 @@ const PRIMARY_TABS = [
   { id: 'memory',      label: 'Timeline',  icon: '🕰️' },
   { id: 'media',       label: 'Media',     icon: '📷' },
   { id: 'settings',    label: 'Settings',  icon: '⚙️' },
+  { id: 'voice',       label: 'Voice',     icon: '🎙️' },
 ];
 
 const AI_TABS = [
