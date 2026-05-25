@@ -520,7 +520,8 @@ export function getConversationState() {
 export function beginResponse(text, emotionOverride = null) {
   const now = Date.now();
 
-  // Cooldown guard — prevents rapid new conversation turns after queue drains
+  // Cooldown guard — prevents rapid new conversation turns
+  // _turnCooldownUntil is set by markSpeakingEnded after each spoken response
   if (now < _turnCooldownUntil) {
     return { queued: false, reason: 'cooldown', retryAfterMs: _turnCooldownUntil - now };
   }
@@ -589,6 +590,8 @@ export function markSpeakingStarted() {
  */
 export function markSpeakingEnded() {
   _conversationState.responding = false;
+  // After speech ends, enforce inter-turn cooldown before next response
+  _turnCooldownUntil = Date.now() + VOICE_TIMING.MIN_RESPONSE_GAP_MS;
   saveVoice({ speakingState: SPEAKING_STATE.IDLE });
   return { speaking: false };
 }
