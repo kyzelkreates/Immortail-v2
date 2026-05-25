@@ -514,8 +514,8 @@ function computeDominantNeed(ns) {
  *   needsState + emotionalState + attachmentGraph + ambientMood + currentRoutine
  * NO random spam actions. Cooldown-gated.
  */
-export function selectBehaviour() {
-  if (now() - _lastBehaviourTick < THROTTLE.BEHAVIOUR_TICK_MS) {
+export function selectBehaviour(force = false) {
+  if (!force && now() - _lastBehaviourTick < THROTTLE.BEHAVIOUR_TICK_MS) {
     return null;  // not ready for next decision
   }
   _lastBehaviourTick = now();
@@ -607,11 +607,7 @@ export function transitionAnimation(targetState, reason = 'behaviour') {
     return { transitioned: false, reason: 'invalid_target_state' };
   }
 
-  const elapsed = now() - _lastAnimWrite;
-  if (elapsed < THROTTLE.ANIM_TRANSITION_MS) {
-    return { transitioned: false, reason: 'cooldown_active', remainingMs: THROTTLE.ANIM_TRANSITION_MS - elapsed };
-  }
-
+  // Read current state FIRST — same-state check takes priority over all throttles
   const core = storage.getCompanionCore();
   const as   = core.animationSystem ?? {};
   const from = as.primaryLayer ?? ANIM_LAYER.IDLE;
@@ -620,7 +616,13 @@ export function transitionAnimation(targetState, reason = 'behaviour') {
     return { transitioned: false, reason: 'already_in_state', state: from };
   }
 
-  // Per-state cooldown check
+  // Global anim write throttle (prevents render spam)
+  const elapsed = now() - _lastAnimWrite;
+  if (elapsed < THROTTLE.ANIM_TRANSITION_MS) {
+    return { transitioned: false, reason: 'cooldown_active', remainingMs: THROTTLE.ANIM_TRANSITION_MS - elapsed };
+  }
+
+  // Per-state cooldown (smooth blending, prevents rapid state cycling)
   const stateCooldown = TRANSITION_COOLDOWN[targetState] ?? 500;
   const timeSinceLast = as.lastTransitionAt ? (now() - as.lastTransitionAt) : Infinity;
   if (timeSinceLast < stateCooldown) {
@@ -867,8 +869,13 @@ export function startObjectInteraction(objectId) {
   const interaction = OBJECT_INTERACTIONS[obj.interactionType];
   if (!interaction) return { started: false, reason: 'no_interaction_defined' };
 
-  // Transition animation — reset anim throttle so object interactions always proceed
+  // Transition animation — object interactions bypass all cooldowns
   _lastAnimWrite = 0;
+  {
+    // Also clear the per-state cooldown from storage so object interactions always proceed
+    const _cc = storage.getCompanionCore();
+    if (_cc.animationSystem) { _cc.animationSystem.lastTransitionAt = null; storage.saveCompanionCore(_cc); }
+  }
   const trans = transitionAnimation(interaction.animLayer, `object_interact:${objectId}`);
   if (!trans.transitioned && trans.reason !== 'already_in_state') {
     return { started: false, reason: `animation_blocked:${trans.reason}` };
@@ -1030,11 +1037,7 @@ export function getPostureContext() {
  * target: 'user' | objectId | null (= idle scan)
  */
 export function updateGaze(target, reason = 'behaviour') {
-  const elapsed = now() - _lastGazeShift;
-  if (elapsed < THROTTLE.GAZE_SHIFT_MS) {
-    return { shifted: false, reason: 'gaze_cooldown', remainingMs: THROTTLE.GAZE_SHIFT_MS - elapsed };
-  }
-
+  // Read current gaze FIRST — same-target check takes priority over cooldown
   const core = storage.getCompanionCore();
   const as   = core.animationSystem ?? {};
   const prev = as.gazeTarget;
@@ -1043,6 +1046,11 @@ export function updateGaze(target, reason = 'behaviour') {
   const targNorm = target ?? 'none';
   if (prevNorm === targNorm) {
     return { shifted: false, reason: 'same_target' };
+  }
+
+  const elapsed = now() - _lastGazeShift;
+  if (elapsed < THROTTLE.GAZE_SHIFT_MS) {
+    return { shifted: false, reason: 'gaze_cooldown', remainingMs: THROTTLE.GAZE_SHIFT_MS - elapsed };
   }
 
   _lastGazeShift = now();
