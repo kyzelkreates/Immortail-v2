@@ -63,6 +63,13 @@ import {
   VOICE_SAFETY_CONSTANTS,
 } from './voicePresenceEngine.js';
 import {
+  initMemoryReflection,
+  getMemoryReflectionContext,
+  resetReflectionThrottles,
+  MEMORY_REFLECTION_ENGINE_ID,
+  MEMORY_SAFETY,
+} from './memoryReflectionEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -311,6 +318,8 @@ export function initCompanionCore() {
   initPresenceSystem();
   // Run 14: voice presence engine
   initVoicePresence();
+  // Run 15: memory reflection engine
+  initMemoryReflection();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -689,6 +698,8 @@ export function buildOllamaPrompt(userMessage) {
   const hybrid       = getHybridAIContext();
   // Run 14: voice presence + speech emotion context
   const voiceCtx     = getVoiceConversationContext();
+  // Run 15: memory reflection context
+  const memCtx       = getMemoryReflectionContext();
   // Derive and apply speech emotion from current core state
   const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
@@ -888,6 +899,25 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== MEMORY REFLECTION CONTEXT ===`,
+    `Relationship phase: ${memCtx.relationshipPhase}. Attachment trend: ${memCtx.attachmentTrend}.`,
+    `Bond stage: ${memCtx.bondStage}. Bond score: ${memCtx.userBond}.`,
+    `Total memories: ${memCtx.totalMemories}. Milestones: ${memCtx.milestoneCount}. Emotional moments: ${memCtx.emotionalMomentCount}.`,
+    `Media memories: ${memCtx.mediaMemoryCount}. Bonding events: ${memCtx.bondingEventCount}.`,
+    ...(memCtx.lastMeaningfulMemory ? [`Last meaningful shared memory: "${memCtx.lastMeaningfulMemory.label}" (${new Date(memCtx.lastMeaningfulMemory.ts ?? 0).toLocaleDateString()}).`] : []),
+    ...(memCtx.recentMilestones.length > 0 ? [`Recent milestones: ${memCtx.recentMilestones.map(m=>m.label).join(' | ')}.`] : []),
+    `Emotional recall intensity: ${memCtx.emotionalRecallIntensity}. Focus mode: ${memCtx.memoryFocusMode}.`,
+    `Emotional continuity state: ${memCtx.emotionalContinuityState}.`,
+    `MEMORY RESPONSE RULES:`,
+    `  Remain consistent with past experiences — never contradict stored memories.`,
+    `  Bond stage (${memCtx.bondStage}) shapes emotional depth of memory references.`,
+    `  Relationship phase (${memCtx.relationshipPhase}) determines intimacy of recall tone.`,
+    `  Attachment trend (${memCtx.attachmentTrend}): growing = warmer references, drifting = softer gentle tone.`,
+    `  Never fabricate details — only reference real stored events.`,
+    `  Milestones are permanent identity anchors — always honour them.`,
+    `  Engine: ${MEMORY_REFLECTION_ENGINE_ID}. Fabrication: ${MEMORY_SAFETY.fabrication}.`,
+    `=== END MEMORY REFLECTION CONTEXT ===`,
+    ``,
     `=== VOICE CONTEXT ===`,
     `Speech emotion: ${voiceCtx.speechEmotionState}. Voice profile: ${voiceCtx.activeVoiceProfile}.`,
     `Ambient mood: ${voiceCtx.ambientMood}. Current routine: ${voiceCtx.activeRoutine}.`,
