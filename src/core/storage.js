@@ -379,6 +379,61 @@ export const DEFAULT_COMPANION_CORE = {
     privacyLog:  [],
     arVersion:   'V1',
   },
+
+  // ── Run 18: behaviour evolution engine ───────────────────────────
+  behaviourEvolution: {
+    evolutionEnabled:     true,
+    evolutionRate:        'slow',
+    stabilityWeight:      0.85,
+    adaptationMode:       'safe',
+    traitDriftProtection: true,
+    coreTraits: {
+      curiosity:      0.5,
+      playfulness:    0.5,
+      calmness:       0.5,
+      attachment:     0.7,
+      responsiveness: 0.6,
+      independence:   0.4,
+    },
+    baselineTraits: {
+      curiosity:      0.5,
+      playfulness:    0.5,
+      calmness:       0.5,
+      attachment:     0.7,
+      responsiveness: 0.6,
+      independence:   0.4,
+    },
+    userInteractionProfile: {
+      preferredTone:             'balanced',
+      interactionFrequency:      0,
+      engagementType:            [],
+      emotionalResponsePatterns: [],
+      favouriteActivities:       [],
+      environmentalPreferences:  [],
+      toneSignals:               { calm: 0, playful: 0, balanced: 0 },
+      lastObservedAt:            null,
+    },
+    stabilityController: {
+      driftDetection:         true,
+      maxDeviationThreshold:  0.15,
+      correctionMode:         'auto',
+      lockOnIdentityMismatch: true,
+      driftState:             'stable',
+      frozenSince:            null,
+      lastStableSnapshot:     null,
+      correctionCount:        0,
+    },
+    personalitySnapshot: {
+      baselineIdentity:   'stable',
+      emotionalTone:      'consistent',
+      behaviourSignature: 'unique',
+      driftIndex:         0.0,
+      capturedAt:         null,
+    },
+    adaptiveRoutines:  [],
+    evolutionLog:      [],
+    evolutionVersion:  'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -651,6 +706,8 @@ export const storage = {
       worldEngine:       deepMerge(DEFAULT_COMPANION_CORE.worldEngine,       persisted.worldEngine       ?? {}),
       // Run 17: AR presence engine
       arEngine:          deepMerge(DEFAULT_COMPANION_CORE.arEngine,          persisted.arEngine          ?? {}),
+      // Run 18: behaviour evolution engine
+      behaviourEvolution: deepMerge(DEFAULT_COMPANION_CORE.behaviourEvolution, persisted.behaviourEvolution ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },

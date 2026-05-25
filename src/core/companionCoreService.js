@@ -84,6 +84,14 @@ import {
   AR_SAFETY,
 } from './arPresenceEngine.js';
 import {
+  initBehaviourEvolutionEngine,
+  getBehaviourEvolutionContext,
+  resetEvolutionThrottles,
+  BEHAVIOUR_EVOLUTION_ENGINE_ID,
+  EVOLUTION_SAFETY,
+  PRIORITY,
+} from './behaviourEvolutionEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -338,6 +346,8 @@ export function initCompanionCore() {
   initWorldEngine();
   // Run 17: AR presence engine
   initArPresenceEngine();
+  // Run 18: behaviour evolution engine
+  initBehaviourEvolutionEngine();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -722,6 +732,8 @@ export function buildOllamaPrompt(userMessage) {
   const worldCtx     = getWorldEngineContext();
   // Run 17: AR engine context
   const arCtx        = getArEngineContext();
+  // Run 18: behaviour evolution context
+  const evolCtx      = getBehaviourEvolutionContext();
   // Derive and apply speech emotion from current core state
   const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
@@ -921,6 +933,23 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== BEHAVIOUR EVOLUTION CONTEXT ===`,
+    `Evolution: enabled=${evolCtx.evolutionEnabled}, rate=${evolCtx.evolutionRate}, mode=${evolCtx.adaptationMode}.`,
+    `Core traits: curiosity=${evolCtx.coreTraits?.curiosity}, playfulness=${evolCtx.coreTraits?.playfulness}, calmness=${evolCtx.coreTraits?.calmness}, attachment=${evolCtx.coreTraits?.attachment}.`,
+    `Drift: index=${evolCtx.driftIndex?.toFixed?.(3)}, state=${evolCtx.driftState}. StabilityWeight=${evolCtx.stabilityWeight}.`,
+    `User profile: preferredTone=${evolCtx.preferredTone}, interactionFrequency=${evolCtx.interactionFrequency}.`,
+    `Identity lock held: ${evolCtx.identityLockHeld} (${evolCtx.identityLockSignature}). Active routines: ${evolCtx.activeRoutines}.`,
+    `BEHAVIOUR EVOLUTION RULES:`,
+    `  Personality evolves slowly — max delta ${EVOLUTION_SAFETY.maxDeltaPerCycle} per cycle.`,
+    `  All changes are reversible and logged — no irreversible mutations.`,
+    `  identityLock (priority ${PRIORITY.IDENTITY_LOCK}) always overrides all trait changes.`,
+    `  No single-event learning — minimum pattern count required before any adaptation.`,
+    `  Drift protection active — driftIndex must stay below 0.15.`,
+    `  Groq never writes final trait changes. Ollama owns all personality shaping.`,
+    `  RandomPersonalityRegen: ${EVOLUTION_SAFETY.randomPersonalityRegen}. UncontrolledLearning: ${EVOLUTION_SAFETY.uncontrolledLearning}.`,
+    `  Engine: ${BEHAVIOUR_EVOLUTION_ENGINE_ID}. AllChangesReversible: ${EVOLUTION_SAFETY.allChangesReversible}.`,
+    `=== END BEHAVIOUR EVOLUTION CONTEXT ===`,
+    ``,
     `=== AR PRESENCE CONTEXT ===`,
     `AR mode: ${arCtx.arSessionState}. Render mode: ${arCtx.renderMode}. Camera: ${arCtx.cameraActive ? 'active' : 'inactive'}.`,
     `Camera permission: ${arCtx.cameraPermission}. Background allowed: ${arCtx.backgroundAllowed}. Persist frames: ${arCtx.persistFrames}.`,
