@@ -53,6 +53,19 @@ import {
   createSnapshot,
   captureSessionState,
 } from './persistenceEngine.js';
+import {
+  initEmbodimentExpansion,
+  getEmbodimentExpansionContext,
+  selectBehaviour,
+  transitionAnimation,
+  deriveAnimationFromMood,
+  derivePostureFromEmotionalState,
+  tickNeeds,
+  tickProceduralIdle,
+  performIdleGazeScan,
+  captureEmbodimentSession,
+  ANIM_LAYER,
+} from './embodimentExpansionEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -266,6 +279,9 @@ export function initCompanionCore() {
   initPersistenceEngine();
   // Capture session state for next-reload restoration
   captureSessionState();
+  // Run 11: embodiment expansion — environment, needs, animation, posture
+  initEmbodimentExpansion();
+  captureEmbodimentSession();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -424,6 +440,11 @@ export function recordChatMessage(text) {
   updateGrowthLevel();
   // Run 7: sync embodiment after every chat
   updateEmbodimentState();
+  // Run 11: tick needs + derive posture + procedural idle
+  tickNeeds();
+  derivePostureFromEmotionalState();
+  tickProceduralIdle();
+  captureEmbodimentSession();
 
   // Legacy compat
   storage.addMemory({
@@ -525,6 +546,9 @@ export function recordInteractionEvent(type) {
   updateGrowthLevel();
   // Run 7: sync embodiment after every interaction
   updateEmbodimentState();
+  // Run 11: tick needs + posture on interactions
+  tickNeeds();
+  derivePostureFromEmotionalState();
 
   EventBus.emit(EVENTS.MEMORY_ADDED, { type, ts: now });
   return core;
@@ -630,6 +654,8 @@ export function buildOllamaPrompt(userMessage) {
   const story        = getLifeStoryContext();
   // Run 10: persistence continuity context
   const persist      = getPersistenceContext();
+  // Run 11: embodiment expansion context
+  const embExp       = getEmbodimentExpansionContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -727,6 +753,23 @@ export function buildOllamaPrompt(userMessage) {
     `  curious/attentive → alert and interested.`,
     `  waiting → patient, slightly eager.`,
     `=== END EMBODIMENT CONTEXT ===`,
+    ``,
+    // ── Run 11: Environment + needs context ──────────────────────
+    `=== ENVIRONMENT CONTEXT ===`,
+    `Active scene: ${embExp.activeScene}. Lighting: ${embExp.lightingMode}. Ambient: ${embExp.ambientState}.`,
+    `Animation state: ${embExp.currentAnimationState}. Posture: ${embExp.postureState}.`,
+    `Head tracking: ${embExp.headTracking}. Tail: ${embExp.tailMovement}.`,
+    ...(embExp.interactionLayer ? [`Currently interacting with: ${embExp.interactionLayer}.`] : []),
+    ...(embExp.gazeTarget        ? [`Gazing toward: ${embExp.gazeTarget}.`]                   : []),
+    `Needs — hunger: ${embExp.hunger.toFixed(0)}, thirst: ${embExp.thirst.toFixed(0)}, boredom: ${embExp.boredom.toFixed(0)}, energy: ${embExp.energy.toFixed(0)}.`,
+    ...(embExp.dominantNeed ? [`Dominant need: ${embExp.dominantNeed}.`] : []),
+    `ENVIRONMENT RESPONSE RULES:`,
+    `  If sleepy posture → shorter, calmer, softer responses.`,
+    `  If playful posture → warmer, more energetic tone.`,
+    `  If resting/sleeping state → very brief, drowsy responses.`,
+    `  If interacting with an object → acknowledge the activity naturally.`,
+    `  Maintain emotional continuity with the physical state at all times.`,
+    `=== END ENVIRONMENT CONTEXT ===`,
     ``,
     // ── Run 8: Life simulation context ──────────────────────────
     `=== LIFE SIMULATION CONTEXT ===`,

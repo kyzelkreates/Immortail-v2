@@ -163,6 +163,49 @@ export const DEFAULT_COMPANION_CORE = {
     },
     lifeStoryVersion:      'V1',
   },
+  // Run 11: environment system
+  environmentSystem: {
+    activeScene:         'living_room',
+    lightingMode:        'warm_soft',
+    interactionZones:    [],        // spatial zones companion can enter
+    environmentObjects:  [],        // object registry (deterministic, no duplicates)
+    ambientState:        'calm',    // calm|active|quiet|evening|night
+    environmentVersion:  'V1',
+    objectInteractionLog:[],        // capped 50 — recent object interactions
+    lastObjectInteraction: null,    // { objectId, action, ts }
+  },
+  // Run 11: needs state — slow deterministic change, clamped [0–100]
+  needsState: {
+    hunger:  25,
+    thirst:  20,
+    boredom: 30,
+    comfort: 80,
+    energy:  70,
+    lastUpdated: null,
+    needsVersion: 'V1',
+  },
+  // Run 11: advanced animation system
+  animationSystem: {
+    primaryLayer:       'idle',     // locomotion|idle|interaction|resting|sleeping|reunion
+    emotionalPosture:   'relaxed',  // relaxed|alert|curious|playful|sleepy|bonded
+    headTracking:       'forward',  // forward|toward_user|toward_object|scanning
+    tailMovement:       'slow_sway',// still|slow_sway|wag|excited_wag
+    interactionLayer:   null,       // current object interaction label or null
+    idleBreathing:      true,
+    blendCooldown:      0,          // ms remaining in transition cooldown
+    lastTransitionAt:   null,       // timestamp of last state change
+    transitionLog:      [],         // capped 20 — recent transitions
+    gazeTarget:         null,       // null|'user'|object_id
+    gazeCooldown:       0,          // ms until gaze can shift again
+    proceduralState: {
+      breathPhase:      0,          // 0-1 breathing cycle position
+      blinkCooldown:    0,          // ms until next blink
+      earTwitchCooldown:0,          // ms until next ear twitch
+      postureShiftCooldown: 0,      // ms until next subtle posture shift
+      tailSwayPhase:    0,          // 0-1 tail sway position
+    },
+    animSystemVersion:  'V1',
+  },
   // Run 10: persistence hardening layer
   persistenceLayer: {
     schemaVersion:       'V1',
@@ -332,6 +375,12 @@ export const storage = {
       lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
       // Run 9: life story — deepMerge preserves all narrative state
       lifeStory:        deepMerge(DEFAULT_COMPANION_CORE.lifeStory,        persisted.lifeStory        ?? {}),
+      // Run 11: environment system
+      environmentSystem: deepMerge(DEFAULT_COMPANION_CORE.environmentSystem, persisted.environmentSystem ?? {}),
+      // Run 11: needs state
+      needsState:        deepMerge(DEFAULT_COMPANION_CORE.needsState,        persisted.needsState        ?? {}),
+      // Run 11: animation system
+      animationSystem:   deepMerge(DEFAULT_COMPANION_CORE.animationSystem,   persisted.animationSystem   ?? {}),
       // Run 10: persistence hardening layer
       persistenceLayer: deepMerge(DEFAULT_COMPANION_CORE.persistenceLayer, persisted.persistenceLayer ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
