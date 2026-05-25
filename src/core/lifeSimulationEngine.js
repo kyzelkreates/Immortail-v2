@@ -70,6 +70,8 @@ export const PASSIVE_ACTIVITY = {
   YAWNING:          { id: 'yawning',          label: 'Yawning',                  moodFit: ['sleepy','relaxed'] },
   EAR_PERKING:      { id: 'ear_perking',      label: 'Ears perking up',           moodFit: ['curious','attentive','playful'] },
   SLOW_BREATHING:   { id: 'slow_breathing',   label: 'Slow calm breathing',       moodFit: ['calm','relaxed','sleepy'] },
+  SLEEPING_DEEPLY:  { id: 'sleeping_deeply',  label: 'Sleeping deeply',           moodFit: ['sleeping','sleepy'] },
+  GENTLE_BREATHING: { id: 'gentle_breathing', label: 'Gentle breathing',           moodFit: ['sleeping','sleepy','calm'] },
   SNIFFING_AIR:     { id: 'sniffing_air',     label: 'Sniffing the air',          moodFit: ['curious','attentive'] },
 };
 
@@ -145,8 +147,9 @@ function appendPassiveActivity(entry) {
  */
 export function deriveDailyCycleState(hourOfDay = new Date().getHours()) {
   if (hourOfDay >= 5  && hourOfDay <= 9)  return DAILY_CYCLE.MORNING;
-  if (hourOfDay >= 10 && hourOfDay <= 17) return DAILY_CYCLE.ACTIVE;
-  if (hourOfDay >= 18 && hourOfDay <= 20) return DAILY_CYCLE.RELAXED;
+  if (hourOfDay >= 10 && hourOfDay <= 14) return DAILY_CYCLE.ACTIVE;
+  if (hourOfDay >= 15 && hourOfDay <= 16) return DAILY_CYCLE.RELAXED;
+  if (hourOfDay >= 17 && hourOfDay <= 20) return DAILY_CYCLE.RELAXED;
   if (hourOfDay >= 21 && hourOfDay <= 22) return DAILY_CYCLE.SLEEPY;
   return DAILY_CYCLE.SLEEPING; // 23:00–04:59
 }
@@ -158,7 +161,7 @@ export function deriveDailyCycleState(hourOfDay = new Date().getHours()) {
 export function getCurrentDailyCycle() {
   const derived = deriveDailyCycleState();
   const stored  = getLifeSim().dailyCycleState ?? DAILY_CYCLE.MORNING;
-  return { derived, stored, hour: new Date().getHours() };
+  return { cycle: derived, derived, stored, hour: new Date().getHours() };
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -236,9 +239,22 @@ export function selectPassiveActivity(ambientMood = AMBIENT_MOOD.CALM, dailyCycl
   const seen = new Set();
   candidates = candidates.filter(c => seen.has(c.id) ? false : seen.add(c.id));
 
+  // Sleeping/sleepy cycle bias — always return a rest activity
+  if (dailyCycle === 'sleeping' || ambientMood === 'sleepy' || ambientMood === 'sleeping') {
+    const restIds = ['lying_down','resting','gentle_breathing','sleeping_deeply'];
+    const restCandidates = candidates.filter(c => restIds.includes(c.id));
+    if (restCandidates.length) {
+      const seed2 = new Date().getMinutes() % restCandidates.length;
+      const r = restCandidates[seed2];
+      return { ...r, activityId: r.activityId ?? r.id };
+    }
+  }
+
   // Deterministic pick: seeded by current minute
   const seed  = new Date().getMinutes() % candidates.length;
-  return candidates[seed];
+  const picked = candidates[seed];
+  // Normalise: always expose `activityId` (alias for `id`) for SSOT compatibility
+  return picked ? { ...picked, activityId: picked.activityId ?? picked.id } : null;
 }
 
 /**
@@ -305,7 +321,7 @@ export function getRoutineInsights() {
   const ls   = getLifeSim();
   const hist = ls.routineHistory ?? [];
 
-  if (hist.length < 3) return { patterns: [], totalEntries: hist.length };
+  if (hist.length < 3) return { patterns: [], totalEntries: hist.length, mostCommonCycle: null, mostCommonMood: null };
 
   // Count mood frequency
   const moodFreq = {};
@@ -322,7 +338,7 @@ export function getRoutineInsights() {
   if (dominantMood)  patterns.push({ type: 'dominant_mood',  value: dominantMood  });
   if (dominantCycle) patterns.push({ type: 'dominant_cycle', value: dominantCycle });
 
-  return { patterns, totalEntries: hist.length, moodFreq, cycleFreq };
+  return { patterns, totalEntries: hist.length, mostCommonCycle: dominantCycle ?? null, mostCommonMood: dominantMood ?? null, moodFreq, cycleFreq };
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -522,12 +538,15 @@ export function tickLifeSimulation() {
 
 export function getLifeSimulationState() {
   const ls = getLifeSim();
+  const recentActivity = (ls.passiveActivities ?? []).slice(-1)[0] ?? null;
   return {
+    cycle:                    ls.dailyCycleState             ?? 'awake',   // alias
     currentRoutine:           ls.currentRoutine              ?? 'idle',
     dailyCycleState:          ls.dailyCycleState             ?? 'awake',
     ambientMood:              ls.ambientMood                 ?? 'calm',
     autonomousState:          ls.autonomousState             ?? { mode: 'passive' },
     sleepState:               ls.sleepState                  ?? { isSleeping: false },
+    passiveActivity:          recentActivity,
     passiveActivitiesCount:   (ls.passiveActivities          ?? []).length,
     routineHistoryCount:      (ls.routineHistory             ?? []).length,
     lastAutonomousTransition: ls.lastAutonomousTransition    ?? null,
@@ -560,5 +579,10 @@ export function setLifeSimLowPowerMode(enabled) {
   _lowPowerMode = !!enabled;
 }
 export function isLifeSimLowPowerMode() { return _lowPowerMode; }
+
+export function resetLifeSimThrottles() {
+  _lastPassiveActivityLog = 0;
+  _lastFullUpdate         = 0;
+}
 
 // ── Constants already exported as `export const` above ──────────
