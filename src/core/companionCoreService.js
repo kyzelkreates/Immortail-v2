@@ -54,6 +54,13 @@ import {
   captureSessionState,
 } from './persistenceEngine.js';
 import {
+  initPresenceSystem,
+  getPresenceConversationContext,
+  getAnimationContinuityContext,
+  getEnvironmentReactivityContext,
+  PRESENCE_STATE, SPATIAL_ZONE,
+} from './presenceEngine.js';
+import {
   initHybridAIOrchestrator,
   getHybridAIContext,
   getEmbodimentProfile,
@@ -291,6 +298,8 @@ export function initCompanionCore() {
   captureEmbodimentSession();
   // Run 12: hybrid AI orchestrator — Ollama + Groq provider registration
   initHybridAIOrchestrator();
+  // Run 13: real-time presence system
+  initPresenceSystem();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -667,6 +676,10 @@ export function buildOllamaPrompt(userMessage) {
   const embExp       = getEmbodimentExpansionContext();
   // Run 12: hybrid AI orchestration context
   const hybrid       = getHybridAIContext();
+  // Run 13: presence + animation continuity context
+  const presence     = getPresenceConversationContext();
+  const animCont     = getAnimationContinuityContext();
+  const envReact     = getEnvironmentReactivityContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -799,6 +812,29 @@ export function buildOllamaPrompt(userMessage) {
     `  Never hallucinate embodiment traits — only use confirmed uploaded media data.`,
     `  Maintain identity continuity across all provider switching events.`,
     `=== END HYBRID AI CONTEXT ===`,
+    ``,
+    // ── Run 13: Presence context ──────────────────────────────────
+    `=== PRESENCE CONTEXT ===`,
+    `Presence state: ${presence.presenceState}. Intensity: ${presence.presenceIntensity}.`,
+    `Spatial zone: ${presence.spatialZone} (pacing: ${presence.zonePacing}).`,
+    `Locomotion: ${presence.locomotionState}. Animation: ${presence.animationState}.`,
+    `Posture: ${presence.postureState}. Environment: ${presence.activeScene} (${presence.ambientState}).`,
+    ...(presence.currentMicroBehaviour ? [`Current micro-behaviour: ${presence.currentMicroBehaviour}.`] : []),
+    ...(presence.attentionTarget       ? [`Attention target: ${presence.attentionTarget}.`]               : []),
+    ...(presence.activeBehaviour       ? [`Active scheduled behaviour: ${presence.activeBehaviour}.`]     : []),
+    ...(presence.dominantNeed          ? [`Dominant need: ${presence.dominantNeed}.`]                     : []),
+    ...(presence.activeSound           ? [`Ambient sound: ${presence.activeSound}.`]                      : []),
+    `Routine: ${presence.currentRoutine}. Ambient mood: ${presence.ambientMood}.`,
+    `Animation continuity — blend: ${animCont.blendDurationMs}ms, easing: ${animCont.easing}.`,
+    `Environment reactivity — intensity: ${envReact.intensity}, zone audio: ${envReact.zoneAudio}.`,
+    `PRESENCE TONE DIRECTIVE: ${presence.conversationToneDirective}`,
+    `PRESENCE RULES:`,
+    `  Match response energy to presence state — sleeping/resting = brief + soft.`,
+    `  Acknowledge active micro-behaviours naturally when relevant.`,
+    `  Environment scene shapes emotional tone — cozy = bonded, garden = playful.`,
+    `  Never break presence continuity with sudden personality shifts.`,
+    `  Maintain spatial awareness — reference zone/activity when contextually natural.`,
+    `=== END PRESENCE CONTEXT ===`,
     ``,
     // ── Run 8: Life simulation context ──────────────────────────
     `=== LIFE SIMULATION CONTEXT ===`,

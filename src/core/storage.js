@@ -178,6 +178,66 @@ export const DEFAULT_COMPANION_CORE = {
     },
     lifeStoryVersion:      'V1',
   },
+  // Run 13: real-time presence engine
+  presenceEngine: {
+    activePresenceState: 'ambient_idle',   // ambient_idle | attentive | repositioning | resting | sleeping | interacting
+    currentSpatialZone:  'resting_area',   // resting_area | play_area | feeding_area | window_area | comfort_area | observation_area
+    activeAttentionTarget: null,           // object id or null
+    currentMicroBehaviour: null,           // ear_twitch | slow_blink | head_tilt | posture_shift | tail_sway | stretch | settle | breathe
+    presenceIntensity: 'calm',             // calm | soft | active | sleepy
+    realTimeState:     'stable',           // stable | transitioning | recovering
+    lastMicroBehaviourAt: null,
+    lastZoneTransitionAt: null,
+    presenceVersion: 'V1',
+  },
+  // Run 13: spatial state — smooth deterministic positioning
+  spatialState: {
+    currentPosition:     { x: 0.5, y: 0.0, z: 0.5 },  // normalised 0-1
+    currentOrientation:  { yaw: 0 },                    // degrees
+    movementTarget:      null,                           // { x, y, z } or null
+    activePath:          [],                             // waypoints
+    currentLocomotionState: 'idle',                      // idle | walking | turning | settling
+    lastMovedAt:         null,
+    positionVersion:     'V1',
+  },
+  // Run 13: behaviour scheduler — prevents spam + rapid switching
+  behaviourScheduler: {
+    activeBehaviour:   null,
+    cooldowns:         {},           // behaviourId → expiry timestamp
+    transitionQueue:   [],           // pending behaviour transitions (capped 5)
+    behaviourPriority: {
+      reunion:         100,
+      interacting:     90,
+      attentive:       70,
+      playful:         60,
+      curious:         50,
+      repositioning:   40,
+      ambient_idle:    30,
+      resting:         20,
+      sleeping:        10,
+    },
+    schedulerState:    'stable',     // stable | processing | cooldown
+    lastSchedulerTick: null,
+    schedulerVersion:  'V1',
+  },
+  // Run 13: ambient audio state
+  ambientAudio: {
+    activeSound:         null,       // breathing | paw_steps | collar | settle | resting | room_ambience
+    soundIntensity:      'low',      // low | medium
+    lastSoundAt:         null,
+    soundCooldownUntil:  null,
+    audioVersion:        'V1',
+  },
+  // Run 13: AR/voice future preparation stubs
+  futureExpansion: {
+    arEnabled:           false,
+    arPlacementReady:    false,
+    voiceInteractionReady: false,
+    roomMappingReady:    false,
+    webcamAwarenessReady: false,
+    spatialAudioExpanded: false,
+    expansionVersion:    'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -424,6 +484,12 @@ export const storage = {
       lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
       // Run 9: life story — deepMerge preserves all narrative state
       lifeStory:        deepMerge(DEFAULT_COMPANION_CORE.lifeStory,        persisted.lifeStory        ?? {}),
+      // Run 13: real-time presence engine
+      presenceEngine:     deepMerge(DEFAULT_COMPANION_CORE.presenceEngine,     persisted.presenceEngine     ?? {}),
+      spatialState:       deepMerge(DEFAULT_COMPANION_CORE.spatialState,       persisted.spatialState       ?? {}),
+      behaviourScheduler: deepMerge(DEFAULT_COMPANION_CORE.behaviourScheduler, persisted.behaviourScheduler ?? {}),
+      ambientAudio:       deepMerge(DEFAULT_COMPANION_CORE.ambientAudio,       persisted.ambientAudio       ?? {}),
+      futureExpansion:    deepMerge(DEFAULT_COMPANION_CORE.futureExpansion,    persisted.futureExpansion    ?? {}),
       // Run 12: AI orchestration + embodiment profile + media library
       aiOrchestration:   deepMerge(DEFAULT_COMPANION_CORE.aiOrchestration,   persisted.aiOrchestration   ?? {}),
       embodimentProfile: deepMerge(DEFAULT_COMPANION_CORE.embodimentProfile, persisted.embodimentProfile ?? {}),
