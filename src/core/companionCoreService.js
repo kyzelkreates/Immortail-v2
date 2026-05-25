@@ -47,6 +47,12 @@ import {
   getLifeStoryContext,
   processMilestones,
 } from './lifeStoryEngine.js';
+import {
+  initPersistenceEngine,
+  getPersistenceContext,
+  createSnapshot,
+  captureSessionState,
+} from './persistenceEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -256,6 +262,10 @@ export function initCompanionCore() {
   tickLifeSimulation();
   // Run 9: sync life story on every boot (throttled internally)
   updateLifeStory();
+  // Run 10: persistence hardening — corruption check, session restore, health
+  initPersistenceEngine();
+  // Capture session state for next-reload restoration
+  captureSessionState();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -618,6 +628,8 @@ export function buildOllamaPrompt(userMessage) {
   const life         = getLifeSimulationContext();
   // Run 9: life story context
   const story        = getLifeStoryContext();
+  // Run 10: persistence continuity context
+  const persist      = getPersistenceContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -751,6 +763,23 @@ export function buildOllamaPrompt(userMessage) {
     `  Preserve emotional consistency with the relationship phase.`,
     `  Avoid shallow or fabricated recall.`,
     `=== END LIFE STORY CONTEXT ===`,
+    ``,
+    // ── Run 10: Continuity context ───────────────────────────────
+    `=== CONTINUITY CONTEXT ===`,
+    `Persistence health: ${persist.persistenceHealth}.`,
+    `Current relationship phase: ${persist.currentPhase}.`,
+    `Bond stage: ${persist.bondStage}.`,
+    ...(persist.restoredState ? ['State was restored from a previous session — maintain full emotional continuity.'] : []),
+    ...(persist.safeMode      ? ['System is in SAFE MODE — be calm, stable, and reassuring.']                       : []),
+    ...(persist.snapshotAvailable
+      ? [`Last snapshot: ${persist.snapshotAge} minute(s) ago — continuity is preserved.`]
+      : ['No snapshot available — this may be the first session.']),
+    ...(persist.lastRecoveryOp ? [`Last recovery operation: ${persist.lastRecoveryOp}.`] : []),
+    `CONTINUITY RULES:`,
+    `  Maintain emotional consistency regardless of system state.`,
+    `  Never break character due to technical state changes.`,
+    `  If restored from session, continue as if uninterrupted.`,
+    `=== END CONTINUITY CONTEXT ===`,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
     `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,

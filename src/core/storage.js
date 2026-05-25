@@ -163,6 +163,20 @@ export const DEFAULT_COMPANION_CORE = {
     },
     lifeStoryVersion:      'V1',
   },
+  // Run 10: persistence hardening layer
+  persistenceLayer: {
+    schemaVersion:       'V1',
+    lastValidSnapshot:   null,    // serialised snapshot object
+    recoveryCheckpoints: [],      // capped 5 — rolling checkpoint log
+    corruptionFlags:     [],      // detected corruption events
+    exportHistory:       [],      // capped 20 — export audit trail
+    importHistory:       [],      // capped 20 — import audit trail
+    recoveryLogs:        [],      // capped 50 — all recovery operations
+    persistenceHealth:   'stable',// stable|warning|degraded|recovery
+    writeQueue:          [],      // queued writes for offline retry
+    lastHealthCheck:     null,    // timestamp of last health check
+    safeMode:            false,   // failsafe safe-mode flag
+  },
   lastInteraction: null,
 };
 
@@ -317,8 +331,10 @@ export const storage = {
       // Run 8: life simulation — deepMerge preserves all routine/mood state
       lifeSimulation:  deepMerge(DEFAULT_COMPANION_CORE.lifeSimulation,  persisted.lifeSimulation  ?? {}),
       // Run 9: life story — deepMerge preserves all narrative state
-      lifeStory:       deepMerge(DEFAULT_COMPANION_CORE.lifeStory,       persisted.lifeStory       ?? {}),
-      lastInteraction: persisted.lastInteraction ?? null,
+      lifeStory:        deepMerge(DEFAULT_COMPANION_CORE.lifeStory,        persisted.lifeStory        ?? {}),
+      // Run 10: persistence hardening layer
+      persistenceLayer: deepMerge(DEFAULT_COMPANION_CORE.persistenceLayer, persisted.persistenceLayer ?? {}),
+      lastInteraction:  persisted.lastInteraction ?? null,
     };
   },
 
