@@ -70,6 +70,13 @@ import {
   MEMORY_SAFETY,
 } from './memoryReflectionEngine.js';
 import {
+  initWorldEngine,
+  getWorldEngineContext,
+  resetWorldThrottles,
+  WORLD_ENGINE_ID,
+  ENVIRONMENT_PROFILES,
+} from './worldEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -320,6 +327,8 @@ export function initCompanionCore() {
   initVoicePresence();
   // Run 15: memory reflection engine
   initMemoryReflection();
+  // Run 16: world engine
+  initWorldEngine();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -700,6 +709,8 @@ export function buildOllamaPrompt(userMessage) {
   const voiceCtx     = getVoiceConversationContext();
   // Run 15: memory reflection context
   const memCtx       = getMemoryReflectionContext();
+  // Run 16: world engine context
+  const worldCtx     = getWorldEngineContext();
   // Derive and apply speech emotion from current core state
   const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
@@ -899,6 +910,23 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== WORLD ENGINE CONTEXT ===`,
+    `Active environment: ${worldCtx.activeEnvironment} (${worldCtx.environmentLabel}).`,
+    `Time of day: ${worldCtx.timeOfDay}. Environment mood: ${worldCtx.environmentMood}.`,
+    `Lighting: intensity=${worldCtx.lightingState?.lightingIntensity?.toFixed(2)}, warmth=${worldCtx.lightingState?.warmthLevel?.toFixed(2)}, shadow=${worldCtx.lightingState?.shadowDepth?.toFixed(2)}.`,
+    `Animation pacing: ${worldCtx.animationPacing}. Voice tone bias: ${worldCtx.voiceToneBias}.`,
+    `Ambient sound: ${worldCtx.ambientSound}. Spatial zones: ${(worldCtx.spatialZones??[]).join(', ')}.`,
+    `Micro-behaviours available: ${(worldCtx.microBehaviours??[]).join(', ')}.`,
+    ...(worldCtx.recentMemoryLinks?.length > 0 ? [`Memory-linked events in this space: ${worldCtx.recentMemoryLinks.map(m=>m.label).join(' | ')}.`] : []),
+    `WORLD BEHAVIOUR RULES:`,
+    `  Companion exists in ${worldCtx.environmentLabel} — ground all descriptions in this space.`,
+    `  Time of day is ${worldCtx.timeOfDay} — energy and pacing must reflect this.`,
+    `  Environment mood (${worldCtx.environmentMood}) influences tone, not controls it.`,
+    `  Micro-behaviours are physical anchors — reference them naturally.`,
+    `  Environment is deterministic — no random world switching in responses.`,
+    `  Engine: ${WORLD_ENGINE_ID}. Deterministic: ${worldCtx.deterministic}. RandomGeneration: ${worldCtx.fabricated}.`,
+    `=== END WORLD ENGINE CONTEXT ===`,
+    ``,
     `=== MEMORY REFLECTION CONTEXT ===`,
     `Relationship phase: ${memCtx.relationshipPhase}. Attachment trend: ${memCtx.attachmentTrend}.`,
     `Bond stage: ${memCtx.bondStage}. Bond score: ${memCtx.userBond}.`,

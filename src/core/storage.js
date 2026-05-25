@@ -283,6 +283,43 @@ export const DEFAULT_COMPANION_CORE = {
     lastAnniversaryCheckAt:   null,
     reflectionVersion:        'V1',
   },
+
+  // ── Run 16: world engine ─────────────────────────────────────────
+  worldEngine: {
+    activeEnvironment:    'living_room',
+    previousEnvironment:  null,
+    transitionState:      'stable',
+    environmentMood:      'neutral',
+    timeOfDay:            'afternoon',
+    lightingState: {
+      lightingIntensity: 0.75,
+      warmthLevel:       0.60,
+      shadowDepth:       0.30,
+      preset:            'warm_neutral',
+      timeOfDay:         'afternoon',
+      computed:          true,
+      random:            false,
+    },
+    worldObjects: {
+      toys:              [],
+      foodBowl:          { id:'food_bowl',  label:'Food Bowl',  position:'kitchen_corner', state:'empty',    stable:true },
+      waterBowl:         { id:'water_bowl', label:'Water Bowl', position:'kitchen_corner', state:'full',     stable:true },
+      bed:               { id:'bed',        label:'Dog Bed',    position:'bedroom_floor',  state:'available',stable:true },
+      blanket:           { id:'blanket',    label:'Blanket',    position:'sofa_area',       state:'available',stable:true },
+      windowZone:        { id:'window',     label:'Window',     position:'living_room_wall',state:'open',    stable:true },
+      interactionPoints: [],
+    },
+    transitionEngine: {
+      activeTransition:   false,
+      fromEnvironment:    null,
+      toEnvironment:      null,
+      transitionProgress: 0.0,
+      startedAt:          null,
+    },
+    environmentMemoryMap: [],
+    transitionLog:        [],
+    worldVersion:         'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -551,6 +588,8 @@ export const storage = {
       voicePresence:     deepMerge(DEFAULT_COMPANION_CORE.voicePresence,     persisted.voicePresence     ?? {}),
       // Run 15: memory reflection engine
       memoryReflection:  deepMerge(DEFAULT_COMPANION_CORE.memoryReflection,  persisted.memoryReflection  ?? {}),
+      // Run 16: world engine
+      worldEngine:       deepMerge(DEFAULT_COMPANION_CORE.worldEngine,       persisted.worldEngine       ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },
