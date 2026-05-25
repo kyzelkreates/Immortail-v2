@@ -15,6 +15,12 @@ export const KEYS = {
   CONFIG:         PREFIX + 'config',
   MEDIA:          PREFIX + 'media',
   COMPANION_CORE: PREFIX + 'companion_core',   // Run 3: unified entity state
+  // Generation 2 keys
+  AI_PROVIDERS:   PREFIX + 'ai_providers',      // G2: provider registry
+  AI_MEMORY:      PREFIX + 'ai_memory',         // G2: persistent conversation memory
+  AI_REQUEST_LOG: PREFIX + 'ai_request_log',    // G2: request/response log
+  AI_WORKER_STATE:PREFIX + 'ai_worker_state',   // G2: worker coordination state
+  AI_DASHBOARD:   PREFIX + 'ai_dashboard',      // G2: dashboard preferences
 };
 
 // ── Default system config ─────────────────────────────────────────
@@ -965,5 +971,74 @@ export const storage = {
     }
   },
 };
+
+  // ══════════════════════════════════════════════════════════════════
+  // GENERATION 2 — AI LAYER ACCESSORS
+  // All AI provider/memory/worker data routes through here.
+  // ══════════════════════════════════════════════════════════════════
+
+  // ── AI Provider Registry ────────────────────────────────────────
+  getProviders:    ()      => read(KEYS.AI_PROVIDERS)  ?? [],
+  saveProviders:   (arr)   => write(KEYS.AI_PROVIDERS, arr),
+  addProvider:     (p)     => {
+    const list = (read(KEYS.AI_PROVIDERS) ?? []).filter(x => x.id !== p.id);
+    return write(KEYS.AI_PROVIDERS, [...list, p]);
+  },
+  updateProvider:  (id, patch) => {
+    const list = read(KEYS.AI_PROVIDERS) ?? [];
+    const idx  = list.findIndex(x => x.id === id);
+    if (idx < 0) return false;
+    list[idx] = { ...list[idx], ...patch, updatedAt: Date.now() };
+    return write(KEYS.AI_PROVIDERS, list);
+  },
+  deleteProvider:  (id)    => {
+    const list = (read(KEYS.AI_PROVIDERS) ?? []).filter(x => x.id !== id);
+    return write(KEYS.AI_PROVIDERS, list);
+  },
+  getProvider:     (id)    => (read(KEYS.AI_PROVIDERS) ?? []).find(x => x.id === id) ?? null,
+
+  // ── AI Memory ─────────────────────────────────────────────────
+  getAIMemory:     ()      => read(KEYS.AI_MEMORY)     ?? { turns: [], summaries: [], emotional: [], milestones: [] },
+  saveAIMemory:    (mem)   => write(KEYS.AI_MEMORY, mem),
+  appendAITurn:    (turn)  => {
+    const mem = storage.getAIMemory();
+    mem.turns = [...(mem.turns ?? []).slice(-499), { ...turn, id: genId(), ts: Date.now() }];
+    return write(KEYS.AI_MEMORY, mem);
+  },
+  appendAIEmotional: (entry) => {
+    const mem = storage.getAIMemory();
+    mem.emotional = [...(mem.emotional ?? []).slice(-199), { ...entry, id: genId(), ts: Date.now() }];
+    return write(KEYS.AI_MEMORY, mem);
+  },
+  appendAIMilestone: (m) => {
+    const mem = storage.getAIMemory();
+    mem.milestones = [...(mem.milestones ?? []), { ...m, id: genId(), ts: Date.now() }];
+    return write(KEYS.AI_MEMORY, mem);
+  },
+
+  // ── AI Request Log ────────────────────────────────────────────
+  getAILog:        ()      => read(KEYS.AI_REQUEST_LOG) ?? [],
+  appendAILog:     (entry) => {
+    const log = (read(KEYS.AI_REQUEST_LOG) ?? []).slice(-499);
+    return write(KEYS.AI_REQUEST_LOG, [...log, { ...entry, id: genId(), ts: Date.now() }]);
+  },
+  clearAILog:      ()      => write(KEYS.AI_REQUEST_LOG, []),
+
+  // ── Worker State ─────────────────────────────────────────────
+  getWorkerState:  ()      => read(KEYS.AI_WORKER_STATE) ?? {},
+  saveWorkerState: (s)     => write(KEYS.AI_WORKER_STATE, s),
+  patchWorkerState:(patch) => {
+    const s = storage.getWorkerState();
+    return write(KEYS.AI_WORKER_STATE, { ...s, ...patch, updatedAt: Date.now() });
+  },
+
+  // ── Dashboard State ───────────────────────────────────────────
+  getDashboard:    ()      => read(KEYS.AI_DASHBOARD)  ?? {},
+  saveDashboard:   (d)     => write(KEYS.AI_DASHBOARD, d),
+  patchDashboard:  (patch) => {
+    const d = storage.getDashboard();
+    return write(KEYS.AI_DASHBOARD, { ...d, ...patch });
+  },
+
 
 export default storage;
