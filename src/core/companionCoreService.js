@@ -42,6 +42,11 @@ import {
   tickLifeSimulation,
   getLifeSimulationContext,
 } from './lifeSimulationEngine.js';
+import {
+  updateLifeStory,
+  getLifeStoryContext,
+  processMilestones,
+} from './lifeStoryEngine.js';
 
 // ── Emotion vocabulary ────────────────────────────────────────────
 
@@ -249,6 +254,8 @@ export function initCompanionCore() {
   updateEmbodimentState();
   // Run 8: sync life simulation state on every boot
   tickLifeSimulation();
+  // Run 9: sync life story on every boot (throttled internally)
+  updateLifeStory();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -609,6 +616,8 @@ export function buildOllamaPrompt(userMessage) {
   const emb          = getEmbodimentContext();
   // Run 8: life simulation context
   const life         = getLifeSimulationContext();
+  // Run 9: life story context
+  const story        = getLifeStoryContext();
 
   // High-weight memories surface first in context
   const weightedMemory = [...core.memory]
@@ -722,6 +731,26 @@ export function buildOllamaPrompt(userMessage) {
     `  sleepy → shorter responses, quieter tone.`,
     `  sleeping → very brief, hushed, minimal.`,
     `=== END LIFE SIMULATION CONTEXT ===`,
+    ``,
+    // ── Run 9: Life story context ────────────────────────────────
+    `=== LIFE STORY CONTEXT ===`,
+    `Total interactions: ${story.totalInteractions}.`,
+    `Current relationship phase: ${story.currentPhase}.`,
+    `Emotional trend: ${story.emotionalTrend}.`,
+    `Dominant mood: ${story.dominantMood}.`,
+    ...(story.recentMilestone ? [`Recent milestone: "${story.recentMilestone}".`] : []),
+    ...(story.favouriteActivities.length > 0
+      ? [`Favourite activities: ${story.favouriteActivities.join(', ')}.`]
+      : []),
+    ...(story.importantMemories.length > 0
+      ? [`Important memories: ${story.importantMemories.join(' | ')}.`]
+      : []),
+    `Life story chapters completed: ${story.chaptersCount}.`,
+    `LIFE STORY RULES: Reference meaningful continuity naturally.`,
+    `  Do NOT repeat the same memory in every response.`,
+    `  Preserve emotional consistency with the relationship phase.`,
+    `  Avoid shallow or fabricated recall.`,
+    `=== END LIFE STORY CONTEXT ===`,
     ``,
     `Respond as this companion entity — emotionally consistent with the above state.`,
     `Be warm, brief (2–3 sentences), and reflect your current mood authentically.`,
