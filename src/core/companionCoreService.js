@@ -92,6 +92,11 @@ import {
   PRIORITY,
 } from './behaviourEvolutionEngine.js';
 import {
+  bootLegacyEngine,
+  buildLegacyCoreDefault,
+  GENERATION_STATUS, LEGACY_VERSION,
+} from './legacyEngine.js';
+import {
   initProductionOptimisationEngine,
   getPerformanceCoreContext,
   resetPerfThrottles,
@@ -357,6 +362,8 @@ export function initCompanionCore() {
   initBehaviourEvolutionEngine();
   // Run 19: production optimisation engine
   initProductionOptimisationEngine();
+  // Run 20: legacy preservation + Generation 1 completion lock
+  bootLegacyEngine();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();

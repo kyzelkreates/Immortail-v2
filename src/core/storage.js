@@ -822,6 +822,8 @@ export const storage = {
       behaviourEvolution: deepMerge(DEFAULT_COMPANION_CORE.behaviourEvolution, persisted.behaviourEvolution ?? {}),
       // Run 19: production optimisation engine
       performanceCore:    deepMerge(DEFAULT_COMPANION_CORE.performanceCore,    persisted.performanceCore    ?? {}),
+      // Run 20: legacy preservation engine — pass-through (no default merge needed)
+      legacyCore:         persisted.legacyCore ?? null,
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },
