@@ -92,6 +92,13 @@ import {
   PRIORITY,
 } from './behaviourEvolutionEngine.js';
 import {
+  initProductionOptimisationEngine,
+  getPerformanceCoreContext,
+  resetPerfThrottles,
+  PROD_ENGINE_ID,
+  PWA_DEPLOYMENT_FLAGS,
+} from './productionOptimisationEngine.js';
+import {
   initPresenceSystem,
   getPresenceConversationContext,
   getAnimationContinuityContext,
@@ -348,6 +355,8 @@ export function initCompanionCore() {
   initArPresenceEngine();
   // Run 18: behaviour evolution engine
   initBehaviourEvolutionEngine();
+  // Run 19: production optimisation engine
+  initProductionOptimisationEngine();
 
   const core = storage.getCompanionCore();  // re-read after absenceReturn may have mutated
   const now  = Date.now();
@@ -734,6 +743,8 @@ export function buildOllamaPrompt(userMessage) {
   const arCtx        = getArEngineContext();
   // Run 18: behaviour evolution context
   const evolCtx      = getBehaviourEvolutionContext();
+  // Run 19: production performance context
+  const perfCtx      = getPerformanceCoreContext();
   // Derive and apply speech emotion from current core state
   const derivedSpeechEmotion = deriveSpeechEmotion(core);
   // Run 13: presence + animation continuity context
@@ -933,6 +944,19 @@ export function buildOllamaPrompt(userMessage) {
     `=== END LIFE STORY CONTEXT ===`,
     ``,
     // ── Run 10: Continuity context ───────────────────────────────
+    `=== PRODUCTION PERFORMANCE CONTEXT ===`,
+    `Render mode: ${perfCtx.renderMode}. Preset: ${perfCtx.currentPreset}. FPS: ${perfCtx.currentFPS}. CPU: ${perfCtx.cpuMode}. Battery: ${perfCtx.batteryMode}.`,
+    `Fallback level: ${perfCtx.fallbackLevel}. Safe boot: ${perfCtx.safeBootMode}. Emotional continuity: ${perfCtx.emotionalContinuity}.`,
+    `Compression: ${perfCtx.compressionEnabled}. PWA ready: ${perfCtx.pwaReady}. Offline first: ${perfCtx.offlineFirst}.`,
+    `PRODUCTION BEHAVIOUR RULES:`,
+    `  Performance optimisation does NOT affect identity, embodiment, or behaviour logic.`,
+    `  identityLock and embodimentProfile are NEVER compressed or modified by this layer.`,
+    `  Offline-first: all systems function fully without internet.`,
+    `  Fallback always preserves emotional continuity even under maximum stress.`,
+    `  No performance feature depends on Groq — Ollama owns system stability.`,
+    `  Engine: ${PROD_ENGINE_ID}. OfflineFirst: ${perfCtx.offlineFirst}. PWA: ${PWA_DEPLOYMENT_FLAGS.pwaReady}.`,
+    `=== END PRODUCTION PERFORMANCE CONTEXT ===`,
+    ``,
     `=== BEHAVIOUR EVOLUTION CONTEXT ===`,
     `Evolution: enabled=${evolCtx.evolutionEnabled}, rate=${evolCtx.evolutionRate}, mode=${evolCtx.adaptationMode}.`,
     `Core traits: curiosity=${evolCtx.coreTraits?.curiosity}, playfulness=${evolCtx.coreTraits?.playfulness}, calmness=${evolCtx.coreTraits?.calmness}, attachment=${evolCtx.coreTraits?.attachment}.`,
