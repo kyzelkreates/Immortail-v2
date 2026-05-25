@@ -300,13 +300,17 @@ function _updateProviderStatus(provider, status) {
   storage.saveCompanionCore(core);
 }
 
-function _recordFallback(fromProvider, reason) {
+function _recordFallback(fromProvider, reason, silent = false) {
   const core = storage.getCompanionCore();
   const ao   = core.aiOrchestration ?? {};
   const entry = { id: genId(), from: fromProvider, to: PROVIDER.OLLAMA, reason, ts: now() };
   ao.fallbackLog = [...(ao.fallbackLog ?? []), entry].slice(-CAPS.FALLBACK_LOG);
   ao.lastFallbackAt = now();
-  ao.orchestrationState = ORCH_STATE.FALLBACK;
+  // Only set orchestrationState=FALLBACK for explicit runtime failures,
+  // not for silent routing resolutions (e.g. Groq not yet configured)
+  if (!silent) {
+    ao.orchestrationState = ORCH_STATE.FALLBACK;
+  }
   core.aiOrchestration = ao;
   storage.saveCompanionCore(core);
   return entry;
@@ -340,8 +344,11 @@ export function resolveProvider(routeType) {
     return { provider: PROVIDER.GROQ, fallback: false, route: routeType };
   }
 
-  // Fallback: use Ollama, log the fallback
-  _recordFallback(PROVIDER.GROQ, `groq_status:${groqStatus}`);
+  // Groq confirmed failed (offline/degraded) → log fallback event
+  // Do NOT log for 'unknown' (unchecked) — that would spam fallback log on every boot
+  if (groqStatus === PROVIDER_STATUS.OFFLINE || groqStatus === PROVIDER_STATUS.DEGRADED) {
+    _recordFallback(PROVIDER.GROQ, `groq_status:${groqStatus}`);
+  }
   return { provider: PROVIDER.OLLAMA, fallback: true, route: routeType, originalProvider: PROVIDER.GROQ };
 }
 
@@ -1299,12 +1306,21 @@ export function initHybridAIOrchestrator() {
   // 3. Build routing engine snapshot
   const routing = getRoutingEngine();
 
+  // After routing engine init, ensure orchestrationState is stable
+  // (routing resolution for unconfigured Groq should not mark system as 'fallback')
+  const postInit = storage.getCompanionCore();
+  if (postInit.aiOrchestration?.orchestrationState !== ORCH_STATE.STABLE) {
+    postInit.aiOrchestration.orchestrationState = ORCH_STATE.STABLE;
+    storage.saveCompanionCore(postInit);
+  }
+  const finalAo = storage.getCompanionCore().aiOrchestration;
+
   console.log('IMMORTAIL HYBRID AI ORCHESTRATOR: boot complete', {
-    ollamaStatus: ao.providerStatus[PROVIDER.OLLAMA],
-    groqStatus:   ao.providerStatus[PROVIDER.GROQ],
-    agentCount:   Object.keys(ao.agentRegistry ?? {}).length,
-    orchState:    ao.orchestrationState,
+    ollamaStatus: finalAo.providerStatus[PROVIDER.OLLAMA],
+    groqStatus:   finalAo.providerStatus[PROVIDER.GROQ],
+    agentCount:   Object.keys(finalAo.agentRegistry ?? {}).length,
+    orchState:    finalAo.orchestrationState,
   });
 
-  return { routing, providerStatus: ao.providerStatus };
+  return { routing, providerStatus: finalAo.providerStatus };
 }
