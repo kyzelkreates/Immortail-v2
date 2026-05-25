@@ -13,6 +13,9 @@ import {
   CAPS,
 } from './lifeStoryEngine.js';
 
+// Re-export for convenience
+export { IMPORTANCE, REL_PHASE, CAPS };
+
 export const REFLECTION_STATE = { IDLE:'idle', RECALLING:'recalling', REFLECTING:'reflecting', PRESENTING:'presenting', COOLDOWN:'cooldown' };
 export const RECALL_INTENSITY  = { SOFT:'soft', MEDIUM:'medium', DEEP:'deep' };
 export const MEMORY_FOCUS_MODE = { BALANCED:'balanced', EMOTIONAL:'emotional', MILESTONES:'milestones', RECENT:'recent', MEDIA:'media' };
@@ -143,9 +146,10 @@ export function scoreMemoryImportance(entry, context={}){
   if(!entry) return { score:IMPORTANCE.MIN, category:MEMORY_CATEGORY.ROUTINE_INTERACTIONS, importanceScore:IMPORTANCE.MIN };
   const score=scoreImportance(entry,context);
   let category=MEMORY_CATEGORY.ROUTINE_INTERACTIONS;
-  if(entry.isMilestone||score>=IMPORTANCE.THRESHOLD_MILESTONE) category=MEMORY_CATEGORY.MILESTONES;
-  else if(['image','video','audio'].includes(entry.type))       category=MEMORY_CATEGORY.MEDIA_LINKED;
+  // Type-based categories take priority over score-based ones
+  if(['image','video','audio'].includes(entry.type))            category=MEMORY_CATEGORY.MEDIA_LINKED;
   else if(entry.type==='reunion_event')                          category=MEMORY_CATEGORY.BONDING_EVENTS;
+  else if(entry.isMilestone||score>=IMPORTANCE.THRESHOLD_MILESTONE) category=MEMORY_CATEGORY.MILESTONES;
   else if(score>=IMPORTANCE.THRESHOLD_HIGH)                      category=MEMORY_CATEGORY.EMOTIONAL_MOMENTS;
   else if(entry.type==='environment'||entry.category==='environment') category=MEMORY_CATEGORY.ENVIRONMENTAL;
   return { score, category, importanceScore:score };
@@ -239,7 +243,15 @@ export function safeCompressMemories(entries, core){
   const milestoneCatIds=new Set((ref.memoryCategories?.[MEMORY_CATEGORY.MILESTONES]??[]).map(e=>e.id));
   const hasMilestone=entries.some(e=>milestoneIds.has(e.id)||milestoneCatIds.has(e.id)||e.isMilestone);
   if(hasMilestone){ logSafetyEvent('compression_blocked_milestone',`batch ${entries.length}`); return { compressed:false, reason:'milestone_in_batch_rejected' }; }
-  const validation=validateCompression(entries,core.lifeStory??{});
+  // Score entries before validation so high-importance check works on unscored raw entries
+  const ag=core.attachmentGraph??{};
+  const scoredEntries=entries.map(e=>({
+    ...e,
+    importanceScore: e.importanceScore ?? scoreImportance(e, { userBond: ag.userBond??0 }),
+  }));
+  const hasHighImportance=scoredEntries.some(e=>(e.importanceScore??0)>=IMPORTANCE.THRESHOLD_HIGH);
+  if(hasHighImportance){ logSafetyEvent('compression_blocked_high_importance',`score in batch`); return { compressed:false, reason:'high_importance_entry_in_batch' }; }
+  const validation=validateCompression(scoredEntries,core.lifeStory??{});
   if(!validation.safe){ logSafetyEvent('compression_validation_failed',validation.reason); return { compressed:false, reason:validation.reason }; }
   return { compressed:true, entriesEligible:entries.length, reversible:true };
 }
@@ -259,12 +271,12 @@ export function detectAndCategoriseMilestones(coreMemories, core){
 export function getRelationshipPhase(core){
   if(!core) core=storage.getCompanionCore();
   const bond=core.attachmentGraph?.userBond??0;
-  const bs  =core.attachmentGraph?.bondStage??'distant';
-  if(bond>=85||bs==='deeply_bonded') return REL_PHASE.DEVOTED;
-  if(bond>=65||bs==='bonded')        return REL_PHASE.BONDED;
-  if(bond>=40||bs==='familiar')      return REL_PHASE.TRUSTED;
-  if(bond>=20)                        return REL_PHASE.FAMILIAR;
-  if(bond>=5)                         return REL_PHASE.ACQUAINTED;
+  // Bond score is authoritative — bondStage only used as a minimum floor, never to override a lower bond score
+  if(bond>=85) return REL_PHASE.DEVOTED;
+  if(bond>=65) return REL_PHASE.BONDED;
+  if(bond>=40) return REL_PHASE.TRUSTED;
+  if(bond>=20) return REL_PHASE.FAMILIAR;
+  if(bond>=5)  return REL_PHASE.ACQUAINTED;
   return REL_PHASE.STRANGER;
 }
 

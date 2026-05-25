@@ -915,7 +915,7 @@ export function buildOllamaPrompt(userMessage) {
     `  Attachment trend (${memCtx.attachmentTrend}): growing = warmer references, drifting = softer gentle tone.`,
     `  Never fabricate details — only reference real stored events.`,
     `  Milestones are permanent identity anchors — always honour them.`,
-    `  Engine: ${MEMORY_REFLECTION_ENGINE_ID}. Fabrication: ${MEMORY_SAFETY.fabrication}.`,
+    `  Engine: ${MEMORY_REFLECTION_ENGINE_ID}. MEMORY_SAFETY.fabrication=${MEMORY_SAFETY.fabrication}.milestoneDelete=${MEMORY_SAFETY.milestoneDelete}.allOpsReversible=${MEMORY_SAFETY.allOpsReversible}.`,
     `=== END MEMORY REFLECTION CONTEXT ===`,
     ``,
     `=== VOICE CONTEXT ===`,

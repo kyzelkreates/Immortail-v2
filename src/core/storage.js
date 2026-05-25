@@ -258,6 +258,31 @@ export const DEFAULT_COMPANION_CORE = {
     voiceMemoryCount:    0,
     voiceVersion:        'V1',
   },
+
+  // ── Run 15: memory reflection engine ───────────────────────────
+  memoryReflection: {
+    activeRecallMode:         false,
+    reflectionState:          'idle',
+    emotionalRecallIntensity: 'medium',
+    lastReflectedMemory:      null,
+    reflectionQueue:          [],
+    memoryFocusMode:          'balanced',
+    memoryCategories: {
+      milestones:           [],
+      emotionalMoments:     [],
+      routineInteractions:  [],
+      mediaLinkedEvents:    [],
+      bondingEvents:        [],
+      environmentalEvents:  [],
+    },
+    anniversaryLog:           [],
+    relationshipPhase:        'stranger',
+    attachmentTrend:          'stable',
+    emotionalContinuityState: 'grounded',
+    lastMeaningfulMemory:     null,
+    lastAnniversaryCheckAt:   null,
+    reflectionVersion:        'V1',
+  },
   // Run 12: hybrid AI orchestration
   aiOrchestration: {
     activeProviders:      [],
@@ -524,6 +549,8 @@ export const storage = {
       persistenceLayer: deepMerge(DEFAULT_COMPANION_CORE.persistenceLayer, persisted.persistenceLayer ?? {}),
       // Run 14: voice presence engine
       voicePresence:     deepMerge(DEFAULT_COMPANION_CORE.voicePresence,     persisted.voicePresence     ?? {}),
+      // Run 15: memory reflection engine
+      memoryReflection:  deepMerge(DEFAULT_COMPANION_CORE.memoryReflection,  persisted.memoryReflection  ?? {}),
       lastInteraction:  persisted.lastInteraction ?? null,
     };
   },
