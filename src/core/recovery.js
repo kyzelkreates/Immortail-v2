@@ -304,7 +304,7 @@ async function _runHooks(type, payload = {}) {
 
 function _emitEvent(eventName, detail = {}) {
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(eventName, { detail }));
     RecoveryLogger.debug(`[Recovery] Event emitted: ${eventName}`);
   }
 }
@@ -316,12 +316,12 @@ function _emitEvent(eventName, detail = {}) {
 function _bindGlobalErrorHandlers() {
   if (typeof window === 'undefined') return;
 
-  window.addEventListener('error', (event) => {
+  if (typeof window !== 'undefined') window.addEventListener('error', (event) => {
     RecoveryLogger.error(`[Recovery] Unhandled error: ${event.message}`);
     recoverRuntime('unhandled_error', event.error);
   });
 
-  window.addEventListener('unhandledrejection', (event) => {
+  if (typeof window !== 'undefined') window.addEventListener('unhandledrejection', (event) => {
     const reason = typeof event.reason === 'string'
       ? event.reason
       : event.reason?.message || 'unknown_rejection';

@@ -632,9 +632,13 @@ export const DEFAULT_COMPANION_CORE = {
 
 // ── Serialisation ─────────────────────────────────────────────────
 
+// ── Storage availability guard (SSR / Vercel edge safe) ──────────
+const _LS = typeof localStorage !== 'undefined' ? localStorage : null;
+
 function write(key, data) {
+  if (!_LS) return false;
   try {
-    localStorage.setItem(key, JSON.stringify({ v: 1, t: Date.now(), d: data }));
+    _LS.setItem(key, JSON.stringify({ v: 1, t: Date.now(), d: data }));
     return true;
   } catch {
     return false;
@@ -642,8 +646,9 @@ function write(key, data) {
 }
 
 function read(key) {
+  if (!_LS) return null;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = _LS.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.d ?? null;
@@ -653,7 +658,8 @@ function read(key) {
 }
 
 function remove(key) {
-  try { localStorage.removeItem(key); return true; }
+  if (!_LS) return false;
+  try { _LS.removeItem(key); return true; }
   catch { return false; }
 }
 

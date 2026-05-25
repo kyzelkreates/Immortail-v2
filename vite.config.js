@@ -18,8 +18,8 @@ export default defineConfig({
           react:   ['react', 'react-dom'],
           // Core engine bundle (lazy-loadable, not blocking initial paint)
           engine: [
-            './src/core/storage.js',
-            './src/core/companionCoreService.js',
+            resolve(__dirname, 'src/core/storage.js'),
+            resolve(__dirname, 'src/core/companionCoreService.js'),
           ],
         },
       },

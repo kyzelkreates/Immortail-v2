@@ -54,6 +54,7 @@ function checkAsyncSupport() {
 
 function checkWebGL() {
   try {
+    if (typeof document === 'undefined') return false;
     const canvas = document.createElement('canvas');
     const ctx =
       canvas.getContext('webgl') || canvas.getContext('experimental-webgl');

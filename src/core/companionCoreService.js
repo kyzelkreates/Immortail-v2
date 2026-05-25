@@ -395,7 +395,7 @@ export function crossSessionConsistencyCheck() {
   // detect null/corrupt sections, then repair and report them.
   let rawPersisted = null;
   try {
-    const raw = localStorage.getItem('immortail_companion_core');
+    const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem('immortail_companion_core') : null;
     rawPersisted = raw ? (JSON.parse(raw)?.d ?? null) : null;
   } catch { rawPersisted = null; }
 

@@ -109,7 +109,7 @@ export function bridgeDispatch(eventType, detail = {}, busFn = null) {
 
   // DOM dispatch (for legacy window.addEventListener listeners)
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(canonical, { detail }));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(canonical, { detail }));
   }
 
   // Bus dispatch (for useEventBus subscribers)

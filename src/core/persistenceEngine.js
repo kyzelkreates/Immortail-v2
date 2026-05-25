@@ -86,7 +86,7 @@ function genId() {
  */
 function getRawCore() {
   try {
-    const raw = localStorage.getItem('immortail_companion_core');
+    const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem('immortail_companion_core') : null;
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.d ?? null;
@@ -774,6 +774,7 @@ export function flushWriteQueue() {
 export function verifyLocalPersistence() {
   try {
     const testKey = '__immortail_persist_test__';
+    if (typeof localStorage === 'undefined') return false;
     localStorage.setItem(testKey, JSON.stringify({ ts: Date.now() }));
     const back = JSON.parse(localStorage.getItem(testKey));
     localStorage.removeItem(testKey);

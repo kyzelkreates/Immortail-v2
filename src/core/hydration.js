@@ -391,7 +391,7 @@ async function _runHooks(phase) {
 
 function _emitHydrationEvent(eventName, detail) {
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(eventName, { detail }));
   }
 }
 

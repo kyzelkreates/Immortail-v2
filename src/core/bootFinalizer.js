@@ -218,7 +218,7 @@ export function lockRuntimeState() {
 
   // Emit DOM event for any listeners
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('immortail:runtime:locked', {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('immortail:runtime:locked', {
       detail: { lockedAt: Date.now() },
     }));
   }
@@ -243,7 +243,7 @@ export function emitAppReady() {
 
   // DOM CustomEvent (UI picks this up)
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('immortailapp:app_ready', { detail }));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('immortailapp:app_ready', { detail }));
   }
 
   FinalizerLogger.info('[BootFinalizer] APP_READY emitted.');

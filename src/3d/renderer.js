@@ -48,7 +48,7 @@ export function initializeRenderer(options = {}) {
   _performanceTier = options.performanceTier || _detectPerformanceTier();
 
   const devicePixelRatio = typeof window !== 'undefined'
-    ? Math.min(window.devicePixelRatio || 1, _config.maxPixelRatio) : 1;
+    ? Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, _config.maxPixelRatio) : 1;
 
   const tierPixelRatio = {
     [PERFORMANCE_TIER.LOW]:    1,
@@ -74,7 +74,7 @@ export function initializeRenderer(options = {}) {
     _canvas.addEventListener('webglcontextrestored', _onContextRestored, false);
   }
   if (typeof window !== 'undefined') {
-    window.addEventListener('resize', _onWindowResize, false);
+    if (typeof window !== 'undefined') window.addEventListener('resize', _onWindowResize, false);
   }
 
   RendererLogger.info(
@@ -83,7 +83,7 @@ export function initializeRenderer(options = {}) {
   );
 
   if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('immortail:renderer:renderer_initialized', {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('immortail:renderer:renderer_initialized', {
       detail: { performanceTier: _performanceTier, timestamp: Date.now() },
     }));
   }
@@ -179,8 +179,8 @@ function _onWindowResize() {
 }
 function _detectPerformanceTier() {
   if (typeof navigator === 'undefined') return PERFORMANCE_TIER.MEDIUM;
-  const cores = navigator.hardwareConcurrency || 4;
-  const mem   = navigator.deviceMemory       || 4;
+  const cores = (typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 4) || 4;
+  const mem   = (typeof navigator !== 'undefined' ? navigator.deviceMemory       : 4) || 4;
   if (cores <= 2 || mem <= 2) return PERFORMANCE_TIER.LOW;
   if (cores >= 8 && mem >= 8) return PERFORMANCE_TIER.HIGH;
   return PERFORMANCE_TIER.MEDIUM;
