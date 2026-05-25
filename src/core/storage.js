@@ -633,12 +633,14 @@ export const DEFAULT_COMPANION_CORE = {
 // ── Serialisation ─────────────────────────────────────────────────
 
 // ── Storage availability guard (SSR / Vercel edge safe) ──────────
-const _LS = typeof localStorage !== 'undefined' ? localStorage : null;
+// Evaluated at call time (not import time) so SSR and test envs work correctly.
+function _ls() { return typeof localStorage !== 'undefined' ? localStorage : null; }
 
 function write(key, data) {
-  if (!_LS) return false;
+  const ls = _ls();
+  if (!ls) return false;
   try {
-    _LS.setItem(key, JSON.stringify({ v: 1, t: Date.now(), d: data }));
+    ls.setItem(key, JSON.stringify({ v: 1, t: Date.now(), d: data }));
     return true;
   } catch {
     return false;
@@ -646,9 +648,10 @@ function write(key, data) {
 }
 
 function read(key) {
-  if (!_LS) return null;
+  const ls = _ls();
+  if (!ls) return null;
   try {
-    const raw = _LS.getItem(key);
+    const raw = ls.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.d ?? null;
@@ -658,8 +661,9 @@ function read(key) {
 }
 
 function remove(key) {
-  if (!_LS) return false;
-  try { _LS.removeItem(key); return true; }
+  const ls = _ls();
+  if (!ls) return false;
+  try { ls.removeItem(key); return true; }
   catch { return false; }
 }
 
@@ -949,6 +953,7 @@ export const storage = {
   },
 
   isAvailable: () => {
+    if (typeof localStorage === 'undefined') return false;
     try {
       localStorage.setItem('__immortail_test__', '1');
       localStorage.removeItem('__immortail_test__');
